@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE `property` ADD COLUMN `additional_fields` TEXT NULL,
+    ADD COLUMN `additional_image_urls` TEXT NULL,
+    ADD COLUMN `building_coverage` INTEGER NULL DEFAULT 0,
+    ADD COLUMN `floor_area_ratio` INTEGER NULL DEFAULT 0,
+    ADD COLUMN `land_area` DOUBLE NULL DEFAULT 0,
+    ADD COLUMN `land_area_text` VARCHAR(100) NULL,
+    ADD COLUMN `main_image_url` VARCHAR(255) NULL,
+    ADD COLUMN `photo_types` TEXT NULL,
+    ADD COLUMN `price_per_tsubo` DOUBLE NULL DEFAULT 0,
+    ADD COLUMN `price_text` VARCHAR(100) NULL,
+    ADD COLUMN `property_name` VARCHAR(255) NULL,
+    ADD COLUMN `property_tags` TEXT NULL,
+    ADD COLUMN `title` VARCHAR(255) NULL,
+    ADD COLUMN `walking_minutes` INTEGER NULL DEFAULT 0;

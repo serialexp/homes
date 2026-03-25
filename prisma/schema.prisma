@@ -1,0 +1,254 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "mysql"
+    url      = env("DATABASE_URL")
+}
+
+model TranslationCache {
+    id              Int      @id @default(autoincrement())
+    source_text     String   @unique @db.VarChar(500)
+    translated_text String   @db.VarChar(500)
+    created_at      DateTime @default(now())
+
+    @@map("translation_cache")
+}
+
+model Page {
+    id      Int    @id @default(autoincrement())
+    url     String @unique @db.VarChar(255)
+    content String @db.LongText
+    kind    String @db.VarChar(50)
+
+    @@map("page")
+}
+
+model Property {
+    id                       Int            @id @default(autoincrement())
+    region                   String         @db.VarChar(100)
+    province                 String         @db.VarChar(100)
+    price                    Int
+    price_text               String?        @db.VarChar(100)
+    coverage                 Int            @default(0)
+    volume                   Int            @default(0)
+    area                     Float          @default(0)
+    land_area                Float?         @default(0)
+    land_area_text           String?        @db.VarChar(100)
+    building_area            Float          @default(0)
+    building_coverage        Int?           @default(0)
+    floor_area_ratio         Int?           @default(0)
+    price_per_tsubo          Float?         @default(0)
+    type                     String?        @db.VarChar(100)
+    train_line               String         @db.VarChar(100)
+    train_station            String         @db.VarChar(100)
+    station_distance         Int            @default(0) @map("station_distance_foot")
+    walking_minutes          Int?           @default(0)
+    address                  String         @db.VarChar(255)
+    suumo_id                 String         @unique @db.VarChar(50)
+    suumo_js_id              String         @db.VarChar(50)
+    url                      String         @db.VarChar(255)
+    property_type            String         @db.VarChar(50)
+    property_tags            String?        @db.Text
+    property_name            String?        @db.VarChar(255)
+    translated_property_name String?        @db.VarChar(255)
+    title                    String?        @db.VarChar(255)
+    translated_title         String?        @db.VarChar(255)
+    main_image_url           String?        @db.VarChar(255)
+    additional_image_urls    String?        @db.Text
+    photo_types              String?        @db.Text
+    postal_code              String         @db.VarChar(20)
+    state                    String         @db.VarChar(100)
+    city                     String         @db.VarChar(100)
+    district                 String?        @db.VarChar(255)
+    additional_fields        String?        @db.Text
+    insert_date              String         @db.VarChar(20)
+    last_updated             DateTime       @default(now())
+    priceHistory             PriceHistory[]
+
+    @@index([suumo_id])
+    @@map("property")
+}
+
+// Building model for common building information
+model Building {
+    id       Int    @id @default(autoincrement())
+    region   String @db.VarChar(100)
+    province String @db.VarChar(100)
+
+    // Building identification
+    suumo_id String @unique @db.VarChar(50)
+    url      String @db.VarChar(255)
+
+    // Building information
+    building_type  String  @db.VarChar(100)
+    title          String? @db.VarChar(255)
+    address        String  @db.VarChar(255)
+    age            String? @db.VarChar(50)
+    floors         String? @db.VarChar(50)
+    main_image_url String? @db.VarChar(255)
+
+    // Transit information
+    stations String @db.Text // JSON string of station objects
+
+    // Location data
+    postal_code String  @db.VarChar(20)
+    state       String  @db.VarChar(100)
+    city        String  @db.VarChar(100)
+    district    String? @db.VarChar(255)
+
+    // Timestamp
+    insert_date  DateTime @default(now())
+    last_updated DateTime @default(now())
+
+    // Relationships
+    rentalUnits      RentalUnit[]
+    buildingStations BuildingStation[]
+
+    @@index([suumo_id])
+    @@map("building")
+}
+
+// RentalUnit model for individual rental units within a building
+model RentalUnit {
+    id Int @id @default(autoincrement())
+
+    // Basic identification
+    suumo_id    String @unique @db.VarChar(50)
+    suumo_js_id String @db.VarChar(50)
+    url         String @db.VarChar(255)
+
+    // Unit details
+    floor               String? @db.VarChar(20)
+    rent                Int
+    rent_text           String? @db.VarChar(100)
+    management_fee      Int     @default(0)
+    management_fee_text String? @db.VarChar(100)
+    deposit             String? @db.VarChar(100)
+    gratuity            String? @db.VarChar(100)
+    layout              String? @db.VarChar(50)
+    size                Float   @default(0)
+    size_text           String? @db.VarChar(50)
+
+    // Images
+    thumbnail_url String? @db.VarChar(255)
+    image_urls    String? @db.Text // Comma-separated string
+
+    // Additional data
+    tags String? @db.Text // Comma-separated string
+
+    // Timestamp
+    insert_date  DateTime @default(now())
+    last_updated DateTime @default(now())
+
+    // Relationships
+    building_id        Int
+    building           Building             @relation(fields: [building_id], references: [id], onDelete: Cascade)
+    rentalPriceHistory RentalPriceHistory[]
+
+    @@index([suumo_id])
+    @@index([building_id])
+    @@map("rental_unit")
+}
+
+model PriceHistory {
+    id          Int      @id @default(autoincrement())
+    property_id Int
+    price       Int
+    price_text  String?  @db.VarChar(100)
+    recorded_at DateTime @default(now())
+    property    Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+    @@index([property_id])
+    @@map("price_history")
+}
+
+model RentalPriceHistory {
+    id                  Int        @id @default(autoincrement())
+    rental_unit_id      Int
+    rent                Int
+    rent_text           String?    @db.VarChar(100)
+    management_fee      Int        @default(0)
+    management_fee_text String?    @db.VarChar(100)
+    recorded_at         DateTime   @default(now())
+    rentalUnit          RentalUnit @relation(fields: [rental_unit_id], references: [id], onDelete: Cascade)
+
+    @@index([rental_unit_id])
+    @@map("rental_price_history")
+}
+
+model RetrievalJob {
+    id              Int       @id @default(autoincrement())
+    processId       String    @unique @db.VarChar(50)
+    status          String    @db.VarChar(20) // 'completed', 'failed', 'cancelled'
+    startTime       DateTime  @default(now())
+    endTime         DateTime?
+    region          String?   @db.VarChar(100)
+    province        String?   @db.VarChar(100)
+    type            String?   @db.VarChar(100)
+    refresh         Boolean   @default(false)
+    totalItems      Int       @default(0)
+    processedItems  Int       @default(0)
+    totalPages      Int       @default(0)
+    downloadedPages Int       @default(0)
+    errorMessage    String?   @db.Text
+
+    @@map("retrieval_job")
+}
+
+// New model for train lines
+model TrainLine {
+    id              Int      @id @default(autoincrement())
+    name            String   @unique @db.VarChar(100)
+    translated_name String?  @db.VarChar(255)
+    operator        String?  @db.VarChar(100)
+    region          String?  @db.VarChar(100)
+    insert_date     DateTime @default(now())
+    last_updated    DateTime @default(now())
+
+    // Relationships
+    stations Station[]
+
+    @@map("train_line")
+}
+
+// New model for stations
+model Station {
+    id              Int      @id @default(autoincrement())
+    name            String   @db.VarChar(100)
+    translated_name String?  @db.VarChar(255)
+    insert_date     DateTime @default(now())
+    last_updated    DateTime @default(now())
+
+    // Relationships
+    train_line_id    Int
+    train_line       TrainLine         @relation(fields: [train_line_id], references: [id], onDelete: Cascade)
+    buildingStations BuildingStation[]
+
+    @@unique([name, train_line_id])
+    @@index([train_line_id])
+    @@map("station")
+}
+
+// Junction table for Building-Station relationship with walking distance
+model BuildingStation {
+    id              Int      @id @default(autoincrement())
+    building_id     Int
+    station_id      Int
+    walking_minutes Int
+    insert_date     DateTime @default(now())
+    last_updated    DateTime @default(now())
+
+    // Relationships
+    building Building @relation(fields: [building_id], references: [id], onDelete: Cascade)
+    station  Station  @relation(fields: [station_id], references: [id], onDelete: Cascade)
+
+    @@unique([building_id, station_id], name: "building_id_station_id")
+    @@index([building_id])
+    @@index([station_id])
+    @@map("building_station")
+}
