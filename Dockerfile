@@ -24,7 +24,6 @@ WORKDIR /app
 # Copy built application from build stage
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
-COPY --from=build /app/public ./public
 COPY --from=build /app/package.json ./
 COPY --from=build /app/server.ts ./
 COPY --from=build /app/src ./src
