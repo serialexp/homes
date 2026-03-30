@@ -1,7 +1,8 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData, useSearchParams } from "@remix-run/react";
-import { PrismaClient, Property } from "@prisma/client";
+import type { Property } from "@prisma/client";
 import { propertyTypes, areas } from "../data/propertyData.js";
+import prisma from "../utils/db.server.js";
 import { useState, useEffect } from "react";
 import { translateAndUpdateProperties } from "../utils/translation.server.js";
 
@@ -15,7 +16,6 @@ const propertyTypeMapping = {
 };
 
 const ITEMS_PER_PAGE = 12;
-const prisma = new PrismaClient();
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const { typeId, areaId, provinceId } = params;

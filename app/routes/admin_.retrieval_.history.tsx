@@ -1,6 +1,7 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData, useSearchParams } from "@remix-run/react";
 import { getRetrievalJobs, getRetrievalJobStats } from "../services/retrievalJobService.server.js";
+import { requireAdminAuth } from "../utils/auth.server.js";
 import type { RetrievalJob } from "@prisma/client";
 
 // Define a type for the serialized job data
@@ -22,6 +23,8 @@ type SerializedRetrievalJob = {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  const authResponse = requireAdminAuth(request);
+  if (authResponse) throw authResponse;
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get("page") || "1", 10);
   const limit = parseInt(url.searchParams.get("limit") || "10", 10);

@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { translateTrainNames } from '../utils/llm.server.js';
 import { areas } from '../data/propertyData.js';
-
-const prisma = new PrismaClient();
+import prisma from './db.server.js';
 
 /**
  * Get or create a train line, including translation

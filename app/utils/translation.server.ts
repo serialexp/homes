@@ -1,11 +1,19 @@
 import * as deepl from 'deepl-node';
-import { PrismaClient } from '@prisma/client';
+import prisma from './db.server.js';
 
-// Initialize DeepL translator with your API key
-// You should store this in an environment variable
-const DEEPL_API_KEY = process.env.DEEPL_API_KEY || '';
-const translator = new deepl.Translator(DEEPL_API_KEY);
-const prisma = new PrismaClient();
+const DEEPL_API_KEY = process.env.DEEPL_API_KEY;
+
+let translator: deepl.Translator | null = null;
+
+function getTranslator(): deepl.Translator {
+  if (!translator) {
+    if (!DEEPL_API_KEY) {
+      throw new Error("DEEPL_API_KEY environment variable is required for DeepL translation but is not set.");
+    }
+    translator = new deepl.Translator(DEEPL_API_KEY);
+  }
+  return translator;
+}
 
 /**
  * Translates text from Japanese to English using DeepL API
@@ -14,13 +22,9 @@ const prisma = new PrismaClient();
  */
 export async function translateJapaneseToEnglish(text: string | null): Promise<string | null> {
   if (!text) return null;
-  if (!DEEPL_API_KEY) {
-    console.error('DeepL API key is not set');
-    return null;
-  }
 
   try {
-    const result = await translator.translateText(text, 'ja', 'en-US');
+    const result = await getTranslator().translateText(text, 'ja', 'en-US');
     return result.text;
   } catch (error) {
     console.error('Translation error:', error);
@@ -36,7 +40,7 @@ export async function translateJapaneseToEnglish(text: string | null): Promise<s
  */
 export async function translateAndUpdateProperties(properties: any[]): Promise<any[]> {
   if (!DEEPL_API_KEY) {
-    console.warn('DeepL API key is not set, skipping translations');
+    console.warn('DEEPL_API_KEY is not set, skipping translations');
     return properties;
   }
 
@@ -80,7 +84,7 @@ export async function translateAndUpdateProperties(properties: any[]): Promise<a
     const textsArray = batch.map(item => item.text);
     
     try {
-      const translatedTexts = await translator.translateText(textsArray, 'ja', 'en-US');
+      const translatedTexts = await getTranslator().translateText(textsArray, 'ja', 'en-US');
       
       // Update properties with translations
       for (let j = 0; j < batch.length; j++) {

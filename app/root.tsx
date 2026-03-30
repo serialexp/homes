@@ -3,8 +3,61 @@ import {
     Meta,
     Outlet,
     Scripts,
+    isRouteErrorResponse,
+    useRouteError,
   } from "@remix-run/react";
   import "./style.css"
+
+  export function ErrorBoundary() {
+    const error = useRouteError();
+
+    let title = "Unexpected Error";
+    let message = "Something went wrong. Please try again later.";
+
+    if (isRouteErrorResponse(error)) {
+      title = `${error.status} ${error.statusText}`;
+      if (error.status === 404) {
+        message = "The page you were looking for could not be found.";
+      } else if (error.status === 500) {
+        message = "There was a server error. Please try again later.";
+      } else {
+        message = error.data?.message || `An error occurred (status ${error.status}).`;
+      }
+    } else if (error instanceof Error) {
+      message = error.message;
+    }
+
+    return (
+      <html lang="en">
+        <head>
+          <link rel="icon" href="data:image/x-icon;base64,AA" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <meta charSet="utf-8" />
+          <title>{title}</title>
+          <Meta />
+          <Links />
+        </head>
+        <body style={{ fontFamily: "system-ui, sans-serif", backgroundColor: "#f5f5f5", color: "#333", margin: 0 }}>
+          <header>
+            <h1 style={{ color: "#2563eb", padding: "1rem", margin: 0, borderBottom: "1px solid #e5e7eb", backgroundColor: "white", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+              Japan Property Explorer
+            </h1>
+          </header>
+          <main style={{ maxWidth: "800px", margin: "4rem auto", textAlign: "center", padding: "2rem" }}>
+            <h2 style={{ fontSize: "2rem", marginBottom: "1rem" }}>{title}</h2>
+            <p style={{ fontSize: "1.1rem", color: "#666", marginBottom: "2rem" }}>{message}</p>
+            <a
+              href="/"
+              style={{ color: "#2563eb", textDecoration: "underline", fontSize: "1rem" }}
+            >
+              Go back home
+            </a>
+          </main>
+          <Scripts />
+        </body>
+      </html>
+    );
+  }
 
   export default function App() {
     return (

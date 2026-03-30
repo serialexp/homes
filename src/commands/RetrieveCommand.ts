@@ -520,24 +520,27 @@ class RetrieveCommand extends EventEmitter {
       }
     }
     
-    // Create new properties
-    if (newProperties.length > 0) {
-      await prisma.property.createMany({
-        data: newProperties
-      });
-    }
-    
-    // Update existing properties
-    for (const update of propertyUpdates) {
-      await prisma.property.update(update);
-    }
-    
-    // Create price history entries
-    if (priceHistoryEntries.length > 0) {
-      await prisma.priceHistory.createMany({
-        data: priceHistoryEntries
-      });
-    }
+    // Atomically create new properties, update existing ones, and record price history
+    await prisma.$transaction(async (tx) => {
+      // Create new properties
+      if (newProperties.length > 0) {
+        await tx.property.createMany({
+          data: newProperties
+        });
+      }
+
+      // Update existing properties
+      for (const update of propertyUpdates) {
+        await tx.property.update(update);
+      }
+
+      // Create price history entries
+      if (priceHistoryEntries.length > 0) {
+        await tx.priceHistory.createMany({
+          data: priceHistoryEntries
+        });
+      }
+    });
 
     console.log(`New properties: ${newProperties.length}, updated properties: ${propertyUpdates.length}, price history entries: ${priceHistoryEntries.length}`);
   }
@@ -647,74 +650,77 @@ class RetrieveCommand extends EventEmitter {
 
       // Process rental units for this building
       for (const unit of units) {
-        // Check if unit already exists
-        const existingUnit = await prisma.rentalUnit.findUnique({
-          where: { suumo_id: unit.suumo_id }
-        });
-        
-        if (existingUnit) {
-          // Check if rent has changed
-          if (existingUnit.rent !== unit.rent) {
-            // Create price history entry
-            await prisma.rentalPriceHistory.create({
+        // Atomically check/create/update unit and its price history
+        await prisma.$transaction(async (tx) => {
+          // Check if unit already exists
+          const existingUnit = await tx.rentalUnit.findUnique({
+            where: { suumo_id: unit.suumo_id }
+          });
+
+          if (existingUnit) {
+            // Check if rent has changed
+            if (existingUnit.rent !== unit.rent) {
+              // Create price history entry
+              await tx.rentalPriceHistory.create({
+                data: {
+                  rental_unit_id: existingUnit.id,
+                  rent: unit.rent,
+                  rent_text: unit.rent_text || null,
+                  management_fee: unit.management_fee,
+                  management_fee_text: unit.management_fee_text || null
+                }
+              });
+
+              // Update unit
+              await tx.rentalUnit.update({
+                where: { id: existingUnit.id },
+                data: {
+                  rent: unit.rent,
+                  rent_text: unit.rent_text || null,
+                  management_fee: unit.management_fee,
+                  management_fee_text: unit.management_fee_text || null,
+                  last_updated: new Date()
+                }
+              });
+            }
+          } else {
+            // Create new rental unit
+            const newUnit = await tx.rentalUnit.create({
               data: {
-                rental_unit_id: existingUnit.id,
+                suumo_id: unit.suumo_id,
+                suumo_js_id: unit.suumo_js_id,
+                url: unit.url,
+                floor: unit.floor || '',
+                rent: unit.rent,
+                rent_text: unit.rent_text || null,
+                management_fee: unit.management_fee,
+                management_fee_text: unit.management_fee_text || null,
+                deposit: unit.deposit || '',
+                gratuity: unit.gratuity || '',
+                layout: unit.layout || '',
+                size: unit.size,
+                size_text: unit.size_text || '',
+                thumbnail_url: unit.thumbnail_url || '',
+                image_urls: unit.image_urls || '',
+                tags: unit.tags || '',
+                insert_date: new Date(),
+                last_updated: new Date(),
+                building_id: buildingId
+              }
+            });
+
+            // Create initial price history entry
+            await tx.rentalPriceHistory.create({
+              data: {
+                rental_unit_id: newUnit.id,
                 rent: unit.rent,
                 rent_text: unit.rent_text || null,
                 management_fee: unit.management_fee,
                 management_fee_text: unit.management_fee_text || null
               }
             });
-            
-            // Update unit
-            await prisma.rentalUnit.update({
-              where: { id: existingUnit.id },
-              data: {
-                rent: unit.rent,
-                rent_text: unit.rent_text || null,
-                management_fee: unit.management_fee,
-                management_fee_text: unit.management_fee_text || null,
-                last_updated: new Date()
-              }
-            });
           }
-        } else {
-          // Create new rental unit
-          const newUnit = await prisma.rentalUnit.create({
-            data: {
-              suumo_id: unit.suumo_id,
-              suumo_js_id: unit.suumo_js_id,
-              url: unit.url,
-              floor: unit.floor || '',
-              rent: unit.rent,
-              rent_text: unit.rent_text || null,
-              management_fee: unit.management_fee,
-              management_fee_text: unit.management_fee_text || null,
-              deposit: unit.deposit || '',
-              gratuity: unit.gratuity || '',
-              layout: unit.layout || '',
-              size: unit.size,
-              size_text: unit.size_text || '',
-              thumbnail_url: unit.thumbnail_url || '',
-              image_urls: unit.image_urls || '',
-              tags: unit.tags || '',
-              insert_date: new Date(),
-              last_updated: new Date(),
-              building_id: buildingId
-            }
-          });
-          
-          // Create initial price history entry
-          await prisma.rentalPriceHistory.create({
-            data: {
-              rental_unit_id: newUnit.id,
-              rent: unit.rent,
-              rent_text: unit.rent_text || null,
-              management_fee: unit.management_fee,
-              management_fee_text: unit.management_fee_text || null
-            }
-          });
-        }
+        });
       }
     }
     

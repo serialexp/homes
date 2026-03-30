@@ -1,14 +1,12 @@
 import { json, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
-import { PrismaClient } from "@prisma/client";
 import * as xpath from "xpath";
+import prisma from "../utils/db.server.js";
 import { DOMParser } from "@xmldom/xmldom";
 import { parseItems } from "../utils/parseUtils.js";
 import { parseRentalBuildings, parseRentalUnitsForDB } from "../utils/rentalParseUtils.js";
 import { generateDomTree, formatDomTree } from "../utils/domUtils.js";
-
-const prisma = new PrismaClient();
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const id = parseInt(params.id || "0", 10);

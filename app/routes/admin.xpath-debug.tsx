@@ -1,8 +1,6 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../utils/db.server.js";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
