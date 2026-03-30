@@ -74,6 +74,9 @@ export async function getAllRedisHash(key: string): Promise<Record<string, strin
  */
 export async function storeRetrievalStatus(status: RetrievalStatus) {
   const key = 'retrieval:status';
+  // Clear all previous fields before writing new status
+  const client = await getRedisClient();
+  await client.del(key);
   await setRedisHash(key, 'status', status.status);
   await setRedisHash(key, 'message', status.message);
   await setRedisHash(key, 'progress', status.progress.toString());
