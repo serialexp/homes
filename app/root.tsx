@@ -1,12 +1,21 @@
-import {
+import type { LoaderFunctionArgs } from "@remix-run/node";
+  import { json } from "@remix-run/node";
+  import {
     Links,
     Meta,
     Outlet,
     Scripts,
     isRouteErrorResponse,
+    useLoaderData,
     useRouteError,
   } from "@remix-run/react";
+  import { getSession } from "./utils/auth.server.js";
   import "./style.css"
+
+  export async function loader({ request }: LoaderFunctionArgs) {
+    const session = await getSession(request);
+    return json({ isAdmin: session.get("authenticated") === true });
+  }
 
   export function ErrorBoundary() {
     const error = useRouteError();
@@ -60,6 +69,7 @@ import {
   }
 
   export default function App() {
+    const { isAdmin } = useLoaderData<typeof loader>();
     return (
       <html lang="en">
         <head>
@@ -108,8 +118,12 @@ import {
               <div className="container mx-auto flex items-center justify-between">
                 <div className="flex space-x-4">
                   <a href="/" className="text-blue-600 hover:text-blue-800">Home</a>
-                  <a href="/admin/retrieval" className="text-blue-600 hover:text-blue-800">Admin</a>
-                  <a href="/admin/xpath-debug" className="text-blue-600 hover:text-blue-800">XPath Debug</a>
+                  {isAdmin && (
+                    <>
+                      <a href="/admin/retrieval" className="text-blue-600 hover:text-blue-800">Admin</a>
+                      <a href="/admin/xpath-debug" className="text-blue-600 hover:text-blue-800">XPath Debug</a>
+                    </>
+                  )}
                 </div>
               </div>
             </nav>
