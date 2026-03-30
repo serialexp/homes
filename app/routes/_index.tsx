@@ -1,6 +1,7 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { propertyTypes } from "../data/propertyData.js";
+import prisma from "../utils/db.server.js";
 
 // For rentals, we only have one type (040)
 const RENTAL_TYPE_ID = '040';
@@ -14,17 +15,33 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return acc;
   }, {} as Record<string, string>);
 
-  return json({ 
+  // Get counts per property type and total rental units
+  const [propertyCounts, rentalCount] = await Promise.all([
+    prisma.property.groupBy({
+      by: ['type'],
+      _count: true,
+    }),
+    prisma.rentalUnit.count(),
+  ]);
+
+  const countsByType: Record<string, number> = {};
+  for (const row of propertyCounts) {
+    if (row.type) countsByType[row.type] = row._count;
+  }
+
+  return json({
     purchaseTypes,
     rentalType: {
       id: RENTAL_TYPE_ID,
       name: propertyTypes[RENTAL_TYPE_ID as keyof typeof propertyTypes]
-    }
+    },
+    countsByType,
+    rentalCount,
   });
 }
 
 export default function Index() {
-  const { purchaseTypes, rentalType } = useLoaderData<typeof loader>();
+  const { purchaseTypes, rentalType, countsByType, rentalCount } = useLoaderData<typeof loader>();
 
   return (
     <div className="container mx-auto p-4">
@@ -37,7 +54,8 @@ export default function Index() {
             className="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100"
           >
             <h3 className="text-xl font-semibold">{rentalType.name}</h3>
-            <p className="mt-2 text-gray-600">Browse rental properties across Japan</p>
+            <p className="mt-1 text-2xl font-bold text-blue-600">{rentalCount.toLocaleString()}</p>
+            <p className="mt-1 text-gray-600">Browse rental properties across Japan</p>
           </Link>
         </div>
       </div>
@@ -53,7 +71,8 @@ export default function Index() {
               className="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100"
             >
               <h3 className="text-xl font-semibold">{String(typeName)}</h3>
-              <p className="mt-2 text-gray-600">Browse {String(typeName).toLowerCase()} properties</p>
+              <p className="mt-1 text-2xl font-bold text-blue-600">{(countsByType[typeId] || 0).toLocaleString()}</p>
+              <p className="mt-1 text-gray-600">Browse {String(typeName).toLowerCase()} properties</p>
             </Link>
           ))}
         </div>
