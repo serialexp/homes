@@ -197,16 +197,18 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
           </div>
           
           {/* Cancel / Reset Buttons */}
-          {currentStatus.status === 'running' && (
+          {currentStatus.status !== 'idle' && (
             <div className="mt-4 flex space-x-2">
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="px-4 py-2 bg-red-600 text-white font-medium rounded-md hover:bg-red-700 disabled:bg-gray-400"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Cancelling..." : "Cancel Retrieval"}
-              </button>
+              {currentStatus.status === 'running' && (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="px-4 py-2 bg-red-600 text-white font-medium rounded-md hover:bg-red-700 disabled:bg-gray-400"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Cancelling..." : "Cancel Retrieval"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleReset}
