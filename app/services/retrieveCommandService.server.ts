@@ -263,6 +263,7 @@ async function executeRetrieval(options: {
             updateRetrievalStatusField({
               message: `Processing items in ${areaName} ${provinceName} ${propertyTypeName} (${processedItems}/${totalItems})`,
               progress: processedItems,
+              total: totalItems,
               estimatedCompletionTime
             });
           }
