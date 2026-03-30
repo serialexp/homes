@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-slim AS build
+FROM node:24-slim AS build
 
 WORKDIR /app
 
@@ -17,7 +17,9 @@ RUN npx prisma generate
 RUN pnpm build
 
 # Production stage
-FROM node:20-slim AS production
+FROM node:24-slim AS production
+
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -40,5 +42,5 @@ ENV PORT=3000
 # Expose the port the app runs on
 EXPOSE 3000
 
-# Command to run the application
-CMD ["node_modules/.bin/tsx", "server.ts"]
+# Run migrations then start the application
+CMD ["sh", "-c", "npx prisma migrate deploy && node_modules/.bin/tsx server.ts"]

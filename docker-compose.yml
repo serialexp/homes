@@ -6,6 +6,7 @@ services:
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD:-homes}@mysql:3306/${MYSQL_DATABASE:-homes}
     depends_on:
       mysql:
         condition: service_healthy
