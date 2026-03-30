@@ -36,3 +36,6 @@ jobs:
             ${{ steps.version.outputs.version && format('{0}/homes:{1}', secrets.DOCKERHUB_USERNAME, steps.version.outputs.version) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Trigger Portainer redeploy
+        run: curl -X POST https://portainer.jp.serial-experiments.com/api/stacks/webhooks/a656e744-0634-41a9-ae2c-3b5db46985a6
