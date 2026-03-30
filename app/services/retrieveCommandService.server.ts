@@ -12,27 +12,19 @@ const retrieveCommand = new RetrieveCommand();
  */
 function calculateEstimatedCompletionTime(
   processingStartTime: Date,
-  sectionsProcessed: number,
-  sectionsToFetch: number
+  unitsProcessed: number,
+  unitsTotal: number
 ): Date | undefined {
-  if (sectionsProcessed === 0 || sectionsToFetch === 0) {
+  if (unitsProcessed === 0 || unitsTotal === 0) {
     return undefined;
   }
 
-  // Calculate time elapsed since processing started
   const elapsedMs = Date.now() - processingStartTime.getTime();
-  
-  // Calculate average time per section
-  const avgTimePerSectionMs = elapsedMs / sectionsProcessed;
-  
-  // Calculate remaining time
-  const remainingSections = sectionsToFetch - sectionsProcessed;
-  const remainingTimeMs = avgTimePerSectionMs * remainingSections;
-  
-  // Calculate estimated completion time
-  const estimatedCompletionTime = new Date(Date.now() + remainingTimeMs);
-  
-  return estimatedCompletionTime;
+  const avgTimePerUnitMs = elapsedMs / unitsProcessed;
+  const remainingUnits = unitsTotal - unitsProcessed;
+  const remainingTimeMs = avgTimePerUnitMs * remainingUnits;
+
+  return new Date(Date.now() + remainingTimeMs);
 }
 
 /**
@@ -145,13 +137,17 @@ async function executeRetrieval(options: {
         retrieveCommand.on('page-download-progress', (pagesProcessed: number, pagesTotalNew: number) => {
           pagesDownloaded = pagesProcessed;
           totalPages = pagesTotalNew;
-          
+
           // Only update if we're in the download phase
           if (currentPhase === 'download') {
-            // Update the progress and total fields to reflect page download progress
+            const estimatedCompletionTime = processingStartTime
+              ? calculateEstimatedCompletionTime(processingStartTime, pagesDownloaded, totalPages)
+              : undefined;
+
             updateRetrievalStatusField({
               progress: pagesDownloaded,
               total: totalPages,
+              estimatedCompletionTime,
               message: `Downloading pages: ${pagesDownloaded}/${totalPages} pages (${Math.round((pagesDownloaded / totalPages) * 100)}%)`
             });
           }
@@ -260,15 +256,9 @@ async function executeRetrieval(options: {
             const provinceName = areas[regionId as keyof typeof areas].provinces[provinceId];
             const propertyTypeName = propertyTypes[type as keyof typeof propertyTypes];
 
-            // Calculate estimated completion time
-            let estimatedCompletionTime;
-            if (processingStartTime && sectionsProcessed > 0) {
-              estimatedCompletionTime = calculateEstimatedCompletionTime(
-                processingStartTime,
-                sectionsProcessed,
-                sectionsToFetch
-              );
-            }
+            const estimatedCompletionTime = processingStartTime && processedItems > 0
+              ? calculateEstimatedCompletionTime(processingStartTime, processedItems, totalItems)
+              : undefined;
 
             updateRetrievalStatusField({
               message: `Processing items in ${areaName} ${provinceName} ${propertyTypeName} (${processedItems}/${totalItems})`,
