@@ -306,7 +306,8 @@ class RetrieveCommand extends EventEmitter {
           // Download the page
           const pageUrl = this.getPageUrl(page, regionId, provinceId, type);
           if (currentlyCachedKeysSet.has(pageUrl)) {
-            console.log(`Page ${pageUrl} already cached, skipping`);
+            pagesDownloaded++;
+            this.emit('page-download-progress', pagesDownloaded, totalPages);
             continue;
           }
           await this.getPage(page, regionId, provinceId, type);
