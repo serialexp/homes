@@ -17,8 +17,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
   // Count rental units per building region/province
   const provinceCounts = await prisma.$queryRaw<Array<{ region: string; province: string; count: bigint }>>`
     SELECT b.region, b.province, COUNT(ru.id) as count
-    FROM RentalUnit ru
-    JOIN Building b ON ru.building_id = b.id
+    FROM rental_unit ru
+    JOIN building b ON ru.building_id = b.id
     GROUP BY b.region, b.province
   `;
 
