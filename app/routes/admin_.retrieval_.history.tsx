@@ -1,7 +1,9 @@
-import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData, useSearchParams } from "@remix-run/react";
-import { getRetrievalJobs, getRetrievalJobStats } from "../services/retrievalJobService.server.js";
+import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
+import { Form, Link, useLoaderData, useSearchParams } from "@remix-run/react";
+import { getRetrievalJobs, getRetrievalJobStats, completeRetrievalJob } from "../services/retrievalJobService.server.js";
+import { storeRetrievalStatus, getRetrievalStatus } from "../services/redis.server.js";
 import { requireAdminAuth } from "../utils/auth.server.js";
+import prisma from "../utils/db.server.js";
 import type { RetrievalJob } from "@prisma/client";
 
 // Define a type for the serialized job data
@@ -27,13 +29,69 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get("page") || "1", 10);
   const limit = parseInt(url.searchParams.get("limit") || "10", 10);
-  
+
   const [jobsData, stats] = await Promise.all([
     getRetrievalJobs(page, limit),
     getRetrievalJobStats()
   ]);
-  
+
   return json({ jobsData, stats });
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  await requireAdminAuth(request);
+  const formData = await request.formData();
+  const actionType = formData.get("_action") as string;
+  const processId = formData.get("processId") as string;
+
+  if (actionType === "mark_failed" && processId) {
+    await completeRetrievalJob(processId, {
+      status: 'failed',
+      errorMessage: 'Manually marked as failed by admin',
+    });
+
+    // Also reset Redis if this job is the current one
+    const redisStatus = await getRetrievalStatus();
+    if (redisStatus && redisStatus.processId === processId) {
+      await storeRetrievalStatus({
+        status: 'idle',
+        message: 'No retrieval process running',
+        progress: 0,
+        total: 0,
+        startTime: new Date(),
+        sectionsToFetch: 0,
+        sectionsProcessed: 0,
+      });
+    }
+
+    return json({ success: true });
+  }
+
+  if (actionType === "reset_all_stuck") {
+    await prisma.retrievalJob.updateMany({
+      where: { status: 'running' },
+      data: {
+        status: 'failed',
+        endTime: new Date(),
+        errorMessage: 'Manually marked as failed by admin',
+      },
+    });
+
+    // Also reset Redis
+    await storeRetrievalStatus({
+      status: 'idle',
+      message: 'No retrieval process running',
+      progress: 0,
+      total: 0,
+      startTime: new Date(),
+      sectionsToFetch: 0,
+      sectionsProcessed: 0,
+    });
+
+    return json({ success: true });
+  }
+
+  return json({ success: false }, { status: 400 });
 }
 
 export default function RetrievalHistoryPage() {
@@ -76,12 +134,23 @@ export default function RetrievalHistoryPage() {
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Retrieval Job History</h2>
-        <Link 
-          to="/admin/retrieval" 
-          className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700"
-        >
-          Back to Retrieval
-        </Link>
+        <div className="flex space-x-2">
+          <Form method="post">
+            <input type="hidden" name="_action" value="reset_all_stuck" />
+            <button
+              type="submit"
+              className="px-4 py-2 bg-yellow-600 text-white font-medium rounded-md hover:bg-yellow-700"
+            >
+              Reset All Stuck Jobs
+            </button>
+          </Form>
+          <Link
+            to="/admin/retrieval"
+            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700"
+          >
+            Back to Retrieval
+          </Link>
+        </div>
       </div>
       
       {/* Stats Cards */}
@@ -121,6 +190,7 @@ export default function RetrievalHistoryPage() {
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Filters</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pages</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -151,12 +221,26 @@ export default function RetrievalHistoryPage() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {job.downloadedPages} / {job.totalPages}
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  {job.status === 'running' && (
+                    <Form method="post">
+                      <input type="hidden" name="_action" value="mark_failed" />
+                      <input type="hidden" name="processId" value={job.processId} />
+                      <button
+                        type="submit"
+                        className="text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Mark Failed
+                      </button>
+                    </Form>
+                  )}
+                </td>
               </tr>
             ))}
             
             {jobsData.jobs.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
+                <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
                   No retrieval jobs found
                 </td>
               </tr>
