@@ -35,9 +35,12 @@ async function initializeRedis() {
 
     // Check if a job was running when the server last shut down
     const previousStatus = await getRetrievalStatus();
-    if (previousStatus && previousStatus.status === 'running') {
-      console.warn(`Retrieval job ${previousStatus.processId || 'unknown'} was interrupted by server restart`);
+    console.log(`Previous retrieval status: ${previousStatus?.status ?? 'none'}`);
 
+    if (previousStatus && previousStatus.status === 'running') {
+      console.warn(`Retrieval job ${previousStatus.processId || 'unknown'} was interrupted by server restart, marking as failed`);
+
+      // Update Redis status first (always works since Redis is connected)
       await storeRetrievalStatus({
         ...previousStatus,
         status: 'failed',
@@ -54,11 +57,13 @@ async function initializeRedis() {
             processedItems: previousStatus.progress,
             errorMessage: 'Interrupted by server restart'
           });
+          console.log(`Updated DB job record for ${previousStatus.processId}`);
         } catch (e) {
           console.error("Failed to update interrupted job record:", e);
         }
       }
-    } else if (!previousStatus) {
+    } else if (!previousStatus || previousStatus.status === 'completed' || previousStatus.status === 'failed' || previousStatus.status === 'cancelled') {
+      // Reset to idle on startup if no job is active
       await storeRetrievalStatus({
         status: 'idle',
         message: 'No retrieval process running',
