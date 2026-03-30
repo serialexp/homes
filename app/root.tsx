@@ -39,7 +39,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
     }
 
     return (
-      <html lang="en">
+      <html lang="en" data-theme="light">
         <head>
           <link rel="icon" href="data:image/x-icon;base64,AA" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -75,7 +75,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
     const navigation = useNavigation();
     const isLoading = navigation.state === "loading";
     return (
-      <html lang="en">
+      <html lang="en" data-theme="light">
         <head>
           <link
             rel="icon"
