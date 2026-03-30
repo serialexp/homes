@@ -7,6 +7,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
     Scripts,
     isRouteErrorResponse,
     useLoaderData,
+    useNavigation,
     useRouteError,
   } from "@remix-run/react";
   import { SignIn, SignOut } from "@phosphor-icons/react";
@@ -71,6 +72,8 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 
   export default function App() {
     const { isAdmin } = useLoaderData<typeof loader>();
+    const navigation = useNavigation();
+    const isLoading = navigation.state === "loading";
     return (
       <html lang="en">
         <head>
@@ -104,6 +107,11 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
           </style>
         </head>
         <body>
+          {isLoading && (
+            <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-blue-200">
+              <div className="h-full bg-blue-600 animate-loading-bar" />
+            </div>
+          )}
           <header>
             <nav className="bg-white border-b border-gray-200 px-4 py-2">
               <div className="container mx-auto flex items-center justify-between">
