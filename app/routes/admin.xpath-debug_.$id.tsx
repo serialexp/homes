@@ -668,6 +668,7 @@ export default function XPathDebugDetailPage() {
           <div>
             <h4 className="font-medium mb-2">Class Details:</h4>
             <div className="bg-gray-100 p-4 rounded overflow-auto" style={{ maxHeight: '60vh' }}>
+              <div className="overflow-x-auto">
               <table className="min-w-full">
                 <thead>
                   <tr className="bg-gray-200">
@@ -701,6 +702,7 @@ export default function XPathDebugDetailPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
         </div>
