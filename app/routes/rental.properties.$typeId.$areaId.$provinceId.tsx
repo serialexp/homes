@@ -418,20 +418,18 @@ export default function RentalPropertiesPage() {
             {buildings.map((building) => (
               <div key={building.id} className="bg-white border border-gray-200 rounded-lg shadow overflow-hidden">
                 {/* Building Information */}
-                <div className="p-6 border-b border-gray-200">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="p-3 sm:p-6 border-b border-gray-200">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
                     <div>
-                      <h3 className="text-xl font-semibold mb-4">{building.title || building.address}</h3>
-                      <div className="space-y-2">
+                      <h3 className="text-lg sm:text-xl font-semibold mb-2">{building.title || building.address}</h3>
+                      <div className="text-sm space-y-1">
                         <p><span className="font-medium">Address:</span> {[t(building.district), t(building.city), t(building.state)].filter(s => s && s !== "-").join(", ")}</p>
-                        <p><span className="font-medium">Type:</span> {t(building.building_type)}</p>
-                        <p><span className="font-medium">Age:</span> {t(building.age)}</p>
-                        <p><span className="font-medium">Floors:</span> {t(building.floors)}</p>
+                        <p><span className="font-medium">Type:</span> {t(building.building_type)} · <span className="font-medium">Age:</span> {t(building.age)} · <span className="font-medium">Floors:</span> {t(building.floors)}</p>
                       </div>
                     </div>
 
                     <div>
-                      <h4 className="font-medium mb-2">Stations:</h4>
+                      <h4 className="font-medium text-sm mb-1">Stations:</h4>
                       {(() => {
                         try {
                           return (
@@ -460,73 +458,115 @@ export default function RentalPropertiesPage() {
                 </div>
 
                 {/* Rental Units */}
-                <div className="p-6">
-                  <h4 className="font-medium mb-4">Available Units ({building.rentalUnits.length})</h4>
-                  <div className="overflow-x-auto">
+                <div className="p-3 sm:p-6">
+                  <h4 className="font-medium mb-3">Available Units ({building.rentalUnits.length})</h4>
+
+                  {/* Mobile: card layout */}
+                  <div className="sm:hidden space-y-3">
+                    {building.rentalUnits.map((unit) => (
+                      <div key={unit.id} className="flex gap-3 p-2 bg-gray-50 rounded-lg">
+                        <div className="flex-shrink-0">
+                          {unit.image_urls?.split(',').slice(0, 1).map((image: string, index: number) => (
+                            <img
+                              key={index}
+                              src={image}
+                              className="w-20 h-20 object-cover rounded cursor-pointer"
+                              onClick={() => setSelectedImage(image)}
+                              alt={`Unit ${index + 1}`}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start">
+                            <span className="font-semibold text-lg">{unit.rent_text || formatPrice(unit.rent)}</span>
+                            <a
+                              href={unit.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 flex-shrink-0"
+                            >
+                              Suumo
+                            </a>
+                          </div>
+                          <div className="text-sm text-gray-600 mt-0.5">
+                            {unit.layout} · {unit.size_text || `${unit.size}m²`} · {unit.floor}F
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            Mgmt {unit.management_fee_text || formatPrice(unit.management_fee)} · Dep {unit.deposit || '-'} · Grat {unit.gratuity || '-'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop: table layout */}
+                  <div className="hidden sm:block overflow-x-auto">
                     <table className="min-w-full">
                       <thead>
                         <tr className="bg-gray-50">
                           <th></th>
-                          <th className="py-2 px-4 text-left">Floor</th>
-                          <th className="py-2 px-4 text-left">Layout</th>
-                          <th className="py-2 px-4 text-left">Size</th>
-                          <th className="py-2 px-4 text-right">Rent</th>
-                          <th className="py-2 px-4 text-right">Management Fee</th>
-                          <th className="py-2 px-4 text-left">Deposit/Gratuity</th>
-                          <th className="py-2 px-4 text-left">Listed</th>
-                          <th className="py-2 px-4 text-center">Actions</th>
+                          <th className="py-2 px-3 text-left text-sm">Floor</th>
+                          <th className="py-2 px-3 text-left text-sm">Layout</th>
+                          <th className="py-2 px-3 text-left text-sm">Size</th>
+                          <th className="py-2 px-3 text-right text-sm">Rent</th>
+                          <th className="py-2 px-3 text-right text-sm">Mgmt Fee</th>
+                          <th className="py-2 px-3 text-left text-sm">Dep/Grat</th>
+                          <th className="py-2 px-3 text-left text-sm">Listed</th>
+                          <th className="py-2 px-3 text-center text-sm">Link</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {building.rentalUnits.map((unit) => (
                           <tr key={unit.id} className="hover:bg-gray-50">
-                            <td className="py-2 px-4 flex justify-center gap-1">
-                              {unit.image_urls?.split(',').slice(0, 2).map((image: string, index: number) => (
-                                <img 
-                                  key={index}
-                                  src={image} 
-                                  className="w-16 h-16 object-cover rounded cursor-pointer hover:opacity-90" 
-                                  onClick={() => setSelectedImage(image)}
-                                  alt={`Unit ${index + 1}`}
-                                />
-                              ))}
+                            <td className="py-1 px-2">
+                              <div className="flex gap-1">
+                                {unit.image_urls?.split(',').slice(0, 2).map((image: string, index: number) => (
+                                  <img
+                                    key={index}
+                                    src={image}
+                                    className="w-14 h-14 object-cover rounded cursor-pointer hover:opacity-90"
+                                    onClick={() => setSelectedImage(image)}
+                                    alt={`Unit ${index + 1}`}
+                                  />
+                                ))}
+                              </div>
                             </td>
-                            <td className="py-2 px-4">{unit.floor}</td>
-                            <td className="py-2 px-4">{unit.layout}</td>
-                            <td className="py-2 px-4">{unit.size_text || `${unit.size} m²`}</td>
-                            <td className="py-2 px-4 text-right font-medium">
+                            <td className="py-1 px-3 text-sm">{unit.floor}</td>
+                            <td className="py-1 px-3 text-sm">{unit.layout}</td>
+                            <td className="py-1 px-3 text-sm">{unit.size_text || `${unit.size}m²`}</td>
+                            <td className="py-1 px-3 text-right text-sm font-medium">
                               {unit.rent_text || formatPrice(unit.rent)}
                             </td>
-                            <td className="py-2 px-4 text-right">
+                            <td className="py-1 px-3 text-right text-sm">
                               {unit.management_fee_text || formatPrice(unit.management_fee)}
                             </td>
-                            <td className="py-2 px-4">
-                              <div>Deposit: {unit.deposit || '-'}</div>
-                              <div>Gratuity: {unit.gratuity || '-'}</div>
+                            <td className="py-1 px-3 text-sm">
+                              <div>{unit.deposit || '-'} / {unit.gratuity || '-'}</div>
                             </td>
-                            <td className="py-2 px-4 text-sm text-gray-600">
+                            <td className="py-1 px-3 text-xs text-gray-600">
                               {formatAge(unit.insert_date as unknown as string)}
                             </td>
-                            <td className="py-2 px-4 text-center">
-                              <a 
+                            <td className="py-1 px-3 text-center">
+                              <a
                                 href={unit.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-block px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                className="inline-block px-2 py-0.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
                               >
-                                Details
+                                Suumo
                               </a>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                    {building.rentalUnits.length === 20 && (
-                      <div className="mt-4 text-center text-sm text-gray-600">
-                        <p>Showing first 20 units ordered by rent. Visit the building page to see all available units.</p>
-                      </div>
-                    )}
                   </div>
+
+                  {building.rentalUnits.length === 20 && (
+                    <div className="mt-3 text-center text-xs text-gray-500">
+                      Showing first 20 units by rent.
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
