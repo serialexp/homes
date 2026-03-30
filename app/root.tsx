@@ -39,7 +39,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
     }
 
     return (
-      <html lang="en" data-theme="light">
+      <html lang="en">
         <head>
           <link rel="icon" href="data:image/x-icon;base64,AA" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -48,18 +48,18 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
           <Meta />
           <Links />
         </head>
-        <body style={{ fontFamily: "system-ui, sans-serif", backgroundColor: "#f5f5f5", color: "#333", margin: 0 }}>
+        <body className="bg-base-200 text-base-content font-sans m-0">
           <header>
-            <h1 style={{ color: "#2563eb", padding: "1rem", margin: 0, borderBottom: "1px solid #e5e7eb", backgroundColor: "white", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            <h1 className="text-blue-600 p-4 m-0 border-b border-base-300 bg-base-100 shadow">
               Japan Property Explorer
             </h1>
           </header>
-          <main style={{ maxWidth: "800px", margin: "4rem auto", textAlign: "center", padding: "2rem" }}>
-            <h2 style={{ fontSize: "2rem", marginBottom: "1rem" }}>{title}</h2>
-            <p style={{ fontSize: "1.1rem", color: "#666", marginBottom: "2rem" }}>{message}</p>
+          <main className="max-w-[800px] mx-auto mt-16 text-center p-8">
+            <h2 className="text-3xl mb-4">{title}</h2>
+            <p className="text-lg text-base-content/60 mb-8">{message}</p>
             <a
               href="/"
-              style={{ color: "#2563eb", textDecoration: "underline", fontSize: "1rem" }}
+              className="text-blue-600 underline text-base"
             >
               Go back home
             </a>
@@ -75,7 +75,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
     const navigation = useNavigation();
     const isLoading = navigation.state === "loading";
     return (
-      <html lang="en" data-theme="light">
+      <html lang="en">
         <head>
           <link
             rel="icon"
@@ -91,13 +91,6 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
           <Links />
           <style>
             {`
-              body {
-                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-                background-color: #f5f5f5;
-                color: #333;
-                line-height: 1.5;
-              }
-              
               .container {
                 max-width: 1200px;
                 margin: 0 auto;
@@ -106,14 +99,14 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
             `}
           </style>
         </head>
-        <body>
+        <body className="bg-base-200 text-base-content font-sans leading-relaxed">
           {isLoading && (
             <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-blue-200">
               <div className="h-full bg-blue-600 animate-loading-bar" />
             </div>
           )}
           <header>
-            <nav className="bg-white border-b border-gray-200 px-4 py-2">
+            <nav className="bg-base-100 border-b border-base-300 px-4 py-2">
               <div className="container mx-auto flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <a href="/">
@@ -129,12 +122,12 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
                 <div>
                   {isAdmin ? (
                     <form method="post" action="/admin/logout">
-                      <button type="submit" className="text-gray-400 hover:text-gray-600" title="Logout">
+                      <button type="submit" className="text-base-content/40 hover:text-base-content/60" title="Logout">
                         <SignOut size={20} />
                       </button>
                     </form>
                   ) : (
-                    <a href="/admin/login" className="text-gray-400 hover:text-gray-600" title="Login">
+                    <a href="/admin/login" className="text-base-content/40 hover:text-base-content/60" title="Login">
                       <SignIn size={20} />
                     </a>
                   )}

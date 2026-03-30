@@ -42,7 +42,7 @@ export default function RentalUnitDetails() {
         <h1 className="text-2xl font-bold">Rental Unit Details</h1>
         <Link 
           to={`/admin/rentals/building/${rentalUnit.building_id}`} 
-          className="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+          className="px-3 py-1 bg-base-300 text-base-content rounded hover:bg-base-200"
         >
           Back to Building
         </Link>
@@ -51,7 +51,7 @@ export default function RentalUnitDetails() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Unit Details */}
         <div className="md:col-span-2">
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="bg-base-100 rounded-lg shadow-md p-6 mb-6">
             <h2 className="text-xl font-semibold mb-4">Unit Information</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -87,7 +87,7 @@ export default function RentalUnitDetails() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-gray-500">No station information available</p>
+                  <p className="text-base-content/60">No station information available</p>
                 )}
               </div>
             </div>
@@ -120,22 +120,22 @@ export default function RentalUnitDetails() {
           </div>
           
           {/* Price History */}
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="bg-base-100 rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold mb-4">Price History</h2>
             
             {rentalUnit.rentalPriceHistory.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="min-w-full bg-white">
+                <table className="min-w-full bg-base-100">
                   <thead>
-                    <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
+                    <tr className="bg-base-200 text-base-content/70 uppercase text-sm leading-normal">
                       <th className="py-3 px-6 text-left">Date</th>
                       <th className="py-3 px-6 text-right">Rent</th>
                       <th className="py-3 px-6 text-right">Management Fee</th>
                     </tr>
                   </thead>
-                  <tbody className="text-gray-600 text-sm">
+                  <tbody className="text-base-content/70 text-sm">
                     {rentalUnit.rentalPriceHistory.map((history: any) => (
-                      <tr key={history.id} className="border-b border-gray-200 hover:bg-gray-50">
+                      <tr key={history.id} className="border-b border-base-300 hover:bg-base-200">
                         <td className="py-3 px-6 text-left">{new Date(history.recorded_at).toLocaleDateString()}</td>
                         <td className="py-3 px-6 text-right">{history.rent_text || `¥${history.rent.toLocaleString()}`}</td>
                         <td className="py-3 px-6 text-right">{history.management_fee_text || `¥${history.management_fee.toLocaleString()}`}</td>
@@ -145,14 +145,14 @@ export default function RentalUnitDetails() {
                 </table>
               </div>
             ) : (
-              <p className="text-gray-500">No price history available</p>
+              <p className="text-base-content/60">No price history available</p>
             )}
           </div>
         </div>
         
         {/* Images */}
         <div className="md:col-span-1">
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="bg-base-100 rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold mb-4">Images</h2>
             
             <div className="space-y-4">
@@ -178,7 +178,7 @@ export default function RentalUnitDetails() {
                 ))
               ) : (
                 !rentalUnit.thumbnail_url && (
-                  <p className="text-gray-500">No images available</p>
+                  <p className="text-base-content/60">No images available</p>
                 )
               )}
             </div>

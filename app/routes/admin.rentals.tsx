@@ -42,19 +42,19 @@ export default function AdminRentals() {
         <h1 className="text-2xl font-bold">Buildings & Rental Units</h1>
         <Link 
           to="/admin" 
-          className="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+          className="px-3 py-1 bg-base-300 text-base-content rounded hover:bg-base-200"
         >
           Back to Dashboard
         </Link>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+      <div className="bg-base-100 rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Buildings ({pagination.totalItems})</h2>
         
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white">
+          <table className="min-w-full bg-base-100">
             <thead>
-              <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
+              <tr className="bg-base-200 text-base-content/70 uppercase text-sm leading-normal">
                 <th className="py-3 px-6 text-left">ID</th>
                 <th className="py-3 px-6 text-left">Title</th>
                 <th className="py-3 px-6 text-left">Address</th>
@@ -64,9 +64,9 @@ export default function AdminRentals() {
                 <th className="py-3 px-6 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="text-gray-600 text-sm">
+            <tbody className="text-base-content/70 text-sm">
               {buildings.map((building: any) => (
-                <tr key={building.id} className="border-b border-gray-200 hover:bg-gray-50">
+                <tr key={building.id} className="border-b border-base-300 hover:bg-base-200">
                   <td className="py-3 px-6 text-left">{building.id}</td>
                   <td className="py-3 px-6 text-left">{building.title || building.address}</td>
                   <td className="py-3 px-6 text-left">{building.address}</td>
@@ -94,20 +94,20 @@ export default function AdminRentals() {
               {pagination.currentPage > 1 && (
                 <Link
                   to={`/admin/rentals?page=${pagination.currentPage - 1}`}
-                  className="px-3 py-1 bg-gray-200 text-gray-800 rounded-l hover:bg-gray-300"
+                  className="px-3 py-1 bg-base-300 text-base-content rounded-l hover:bg-base-200"
                 >
                   Previous
                 </Link>
               )}
               
-              <span className="px-4 py-1 bg-gray-100">
+              <span className="px-4 py-1 bg-base-200">
                 Page {pagination.currentPage} of {pagination.totalPages}
               </span>
               
               {pagination.currentPage < pagination.totalPages && (
                 <Link
                   to={`/admin/rentals?page=${pagination.currentPage + 1}`}
-                  className="px-3 py-1 bg-gray-200 text-gray-800 rounded-r hover:bg-gray-300"
+                  className="px-3 py-1 bg-base-300 text-base-content rounded-r hover:bg-base-200"
                 >
                   Next
                 </Link>

@@ -10,9 +10,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function AdminLayout() {
   return (
     <>
-      <div className="bg-gray-100 border-b border-gray-200 px-4 py-1 flex justify-end">
+      <div className="bg-base-200 border-b border-base-300 px-4 py-1 flex justify-end">
         <Form method="post" action="/admin/logout">
-          <button type="submit" className="text-sm text-gray-500 hover:text-gray-700">
+          <button type="submit" className="text-sm text-base-content/60 hover:text-base-content/70">
             Logout
           </button>
         </Form>

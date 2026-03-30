@@ -43,13 +43,13 @@ export default function XPathDebugPage() {
     <div className="container mx-auto p-4">
       <h2 className="text-2xl font-bold mb-6">XPath Debugging</h2>
       
-      <div className="bg-white p-6 rounded-lg shadow mb-6">
+      <div className="bg-base-100 p-6 rounded-lg shadow mb-6">
         <h3 className="text-xl font-semibold mb-4">Recently Retrieved Pages</h3>
         
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white">
+          <table className="min-w-full bg-base-100">
             <thead>
-              <tr className="bg-gray-100 border-b">
+              <tr className="bg-base-200 border-b">
                 <th className="py-2 px-4 text-left">ID</th>
                 <th className="py-2 px-4 text-left">URL</th>
                 <th className="py-2 px-4 text-left">Kind</th>
@@ -58,7 +58,7 @@ export default function XPathDebugPage() {
             </thead>
             <tbody>
               {pages.map((page) => (
-                <tr key={page.id} className="border-b hover:bg-gray-50">
+                <tr key={page.id} className="border-b hover:bg-base-200">
                   <td className="py-2 px-4">{page.id}</td>
                   <td className="py-2 px-4">
                     <Link to={page.url} title={page.url} target="_blank">
@@ -82,7 +82,7 @@ export default function XPathDebugPage() {
               
               {pages.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-4 px-4 text-center text-gray-500">
+                  <td colSpan={4} className="py-4 px-4 text-center text-base-content/60">
                     No pages found
                   </td>
                 </tr>
@@ -101,7 +101,7 @@ export default function XPathDebugPage() {
               {pagination.currentPage > 1 && (
                 <Link
                   to={`/admin/xpath-debug?page=${pagination.currentPage - 1}`}
-                  className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                  className="px-3 py-1 bg-base-300 rounded hover:bg-base-200"
                 >
                   Previous
                 </Link>
@@ -110,7 +110,7 @@ export default function XPathDebugPage() {
               {pagination.currentPage < pagination.totalPages && (
                 <Link
                   to={`/admin/xpath-debug?page=${pagination.currentPage + 1}`}
-                  className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                  className="px-3 py-1 bg-base-300 rounded hover:bg-base-200"
                 >
                   Next
                 </Link>

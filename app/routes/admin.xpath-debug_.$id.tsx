@@ -420,7 +420,7 @@ export default function XPathDebugDetailPage() {
       
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
         {/* Page Info */}
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div className="bg-base-100 p-6 rounded-lg shadow">
           <h3 className="text-xl font-semibold mb-4">Page Information</h3>
           
           <div className="mb-4">
@@ -448,7 +448,7 @@ export default function XPathDebugDetailPage() {
             <button
               type="button"
               onClick={() => setShowHtml(!showHtml)}
-              className={`px-4 py-2 ${showHtml ? 'bg-blue-600 text-white' : 'bg-gray-200'} rounded hover:bg-blue-700 hover:text-white`}
+              className={`px-4 py-2 ${showHtml ? 'bg-blue-600 text-white' : 'bg-base-300'} rounded hover:bg-blue-700 hover:text-white`}
             >
               {showHtml ? 'Hide HTML' : 'Show HTML'}
             </button>
@@ -456,7 +456,7 @@ export default function XPathDebugDetailPage() {
             <button
               type="button"
               onClick={() => setShowDomTree(!showDomTree)}
-              className={`px-4 py-2 ${showDomTree ? 'bg-blue-600 text-white' : 'bg-gray-200'} rounded hover:bg-blue-700 hover:text-white`}
+              className={`px-4 py-2 ${showDomTree ? 'bg-blue-600 text-white' : 'bg-base-300'} rounded hover:bg-blue-700 hover:text-white`}
             >
               {showDomTree ? 'Hide DOM Tree' : 'Show DOM Tree'}
             </button>
@@ -464,11 +464,11 @@ export default function XPathDebugDetailPage() {
           
           {/* DOM Tree Settings */}
           {showDomTree && (
-            <div className="mb-4 p-4 bg-gray-50 rounded">
+            <div className="mb-4 p-4 bg-base-200 rounded">
               <h4 className="font-medium mb-2">DOM Tree Settings:</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="maxDepth" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="maxDepth" className="block text-sm font-medium text-base-content/70 mb-1">
                     Max Depth:
                   </label>
                   <input
@@ -476,13 +476,13 @@ export default function XPathDebugDetailPage() {
                     id="maxDepth"
                     value={domTreeMaxDepth}
                     onChange={(e) => setDomTreeMaxDepth(parseInt(e.target.value) || 10)}
-                    className="w-full p-2 border border-gray-300 rounded-md"
+                    className="w-full p-2 border border-base-300 rounded-md"
                     min="1"
                     max="50"
                   />
                 </div>
                 <div>
-                  <label htmlFor="maxChildren" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="maxChildren" className="block text-sm font-medium text-base-content/70 mb-1">
                     Max Children per Node:
                   </label>
                   <input
@@ -490,7 +490,7 @@ export default function XPathDebugDetailPage() {
                     id="maxChildren"
                     value={domTreeMaxChildren}
                     onChange={(e) => setDomTreeMaxChildren(parseInt(e.target.value) || 20)}
-                    className="w-full p-2 border border-gray-300 rounded-md"
+                    className="w-full p-2 border border-base-300 rounded-md"
                     min="1"
                     max="100"
                   />
@@ -534,7 +534,7 @@ export default function XPathDebugDetailPage() {
               </Form>
             </div>
             {!isRentalPage && (
-              <p className="mt-2 text-sm text-gray-600">
+              <p className="mt-2 text-sm text-base-content/70">
                 Note: This doesn't appear to be a rental page, but you can still try parsing rental items.
               </p>
             )}
@@ -542,12 +542,12 @@ export default function XPathDebugDetailPage() {
         </div>
         
         {/* XPath Query Form */}
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div className="bg-base-100 p-6 rounded-lg shadow">
           <h3 className="text-xl font-semibold mb-4">XPath Query</h3>
           
           <Form method="post" ref={formRef}>
             <div className="mb-4">
-              <label htmlFor="xpath" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="xpath" className="block text-sm font-medium text-base-content/70 mb-1">
                 XPath Expression:
               </label>
               <input
@@ -556,7 +556,7 @@ export default function XPathDebugDetailPage() {
                 name="xpath"
                 value={xpathQuery}
                 onChange={(e) => setXpathQuery(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md"
+                className="w-full p-2 border border-base-300 rounded-md"
                 placeholder="Enter XPath query (e.g., //div[@class='example'])"
               />
             </div>
@@ -577,7 +577,7 @@ export default function XPathDebugDetailPage() {
                 <button
                   key={index}
                   onClick={() => applyCommonQuery(query)}
-                  className="px-2 py-1 bg-gray-200 text-sm rounded hover:bg-gray-300"
+                  className="px-2 py-1 bg-base-300 text-sm rounded hover:bg-base-200"
                 >
                   {query.length > 30 ? query.substring(0, 30) + '...' : query}
                 </button>
@@ -586,12 +586,12 @@ export default function XPathDebugDetailPage() {
           </div>
           
           {/* Class Analysis Form */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="mt-6 pt-6 border-t border-base-300">
             <h4 className="font-medium mb-2">Class Analysis:</h4>
             <Form method="post" ref={classAnalysisFormRef}>
               <input type="hidden" name="_action" value="analyze_class" />
               <div className="mb-4">
-                <label htmlFor="className" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="className" className="block text-sm font-medium text-base-content/70 mb-1">
                   Class Name:
                 </label>
                 <input
@@ -600,7 +600,7 @@ export default function XPathDebugDetailPage() {
                   name="className"
                   value={className}
                   onChange={(e) => setClassName(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md"
+                  className="w-full p-2 border border-base-300 rounded-md"
                   placeholder="Enter class name (e.g., property_unit-content)"
                 />
               </div>
@@ -619,7 +619,7 @@ export default function XPathDebugDetailPage() {
       
       {/* Class Analysis Results */}
       {hasClassAnalysis && (
-        <div className="mb-6 bg-white p-6 rounded-lg shadow">
+        <div className="mb-6 bg-base-100 p-6 rounded-lg shadow">
           <h3 className="text-xl font-semibold mb-4">
             Class Analysis: "{(actionData as ClassAnalysisData).className}"
           </h3>
@@ -658,7 +658,7 @@ export default function XPathDebugDetailPage() {
             <h4 className="font-medium mb-2">Element Types:</h4>
             <div className="flex flex-wrap gap-2">
               {Object.entries((actionData as ClassAnalysisData).analysis.elementTypes).map(([type, count]) => (
-                <div key={type} className="px-3 py-1 bg-gray-100 rounded">
+                <div key={type} className="px-3 py-1 bg-base-200 rounded">
                   <span className="font-medium">{type}:</span> {count}
                 </div>
               ))}
@@ -667,11 +667,11 @@ export default function XPathDebugDetailPage() {
           
           <div>
             <h4 className="font-medium mb-2">Class Details:</h4>
-            <div className="bg-gray-100 p-4 rounded overflow-auto" style={{ maxHeight: '60vh' }}>
+            <div className="bg-base-200 p-4 rounded overflow-auto" style={{ maxHeight: '60vh' }}>
               <div className="overflow-x-auto">
               <table className="min-w-full">
                 <thead>
-                  <tr className="bg-gray-200">
+                  <tr className="bg-base-300">
                     <th className="py-2 px-4 text-left">Element</th>
                     <th className="py-2 px-4 text-left">Full Class Attribute</th>
                     <th className="py-2 px-4 text-left">Classes</th>
@@ -679,7 +679,7 @@ export default function XPathDebugDetailPage() {
                 </thead>
                 <tbody>
                   {(actionData as ClassAnalysisData).analysis.classDetails.map((detail, index) => (
-                    <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <tr key={index} className={index % 2 === 0 ? 'bg-base-100' : 'bg-base-200'}>
                       <td className="py-2 px-4 font-mono">{detail.nodeName}</td>
                       <td className="py-2 px-4 font-mono">{detail.fullClassName}</td>
                       <td className="py-2 px-4">
@@ -690,7 +690,7 @@ export default function XPathDebugDetailPage() {
                               className={`px-2 py-1 text-xs rounded ${
                                 cls === (actionData as ClassAnalysisData).className 
                                   ? 'bg-green-200 text-green-800' 
-                                  : 'bg-gray-200'
+                                  : 'bg-base-300'
                               }`}
                             >
                               {cls}
@@ -710,10 +710,10 @@ export default function XPathDebugDetailPage() {
       
       {/* DOM Tree View */}
       {showDomTree && (
-        <div className="mb-6 bg-white p-6 rounded-lg shadow">
+        <div className="mb-6 bg-base-100 p-6 rounded-lg shadow">
           <h3 className="text-xl font-semibold mb-4">DOM Tree</h3>
           
-          <div className="bg-gray-100 p-4 rounded overflow-auto" style={{ maxHeight: '80vh' }}>
+          <div className="bg-base-200 p-4 rounded overflow-auto" style={{ maxHeight: '80vh' }}>
             <pre className="text-xs font-mono whitespace-pre">{domTreeText}</pre>
           </div>
         </div>
@@ -721,10 +721,10 @@ export default function XPathDebugDetailPage() {
       
       {/* HTML Content */}
       {showHtml && (
-        <div className="mb-6 bg-white p-6 rounded-lg shadow">
+        <div className="mb-6 bg-base-100 p-6 rounded-lg shadow">
           <h3 className="text-xl font-semibold mb-4">HTML Content</h3>
           
-          <div className="bg-gray-100 p-4 rounded overflow-auto" style={{ maxHeight: '80vh' }}>
+          <div className="bg-base-200 p-4 rounded overflow-auto" style={{ maxHeight: '80vh' }}>
             <pre className="text-xs whitespace-pre-wrap break-all">{page.content}</pre>
           </div>
         </div>
@@ -732,7 +732,7 @@ export default function XPathDebugDetailPage() {
       
       {/* Rental Parse Results */}
       {hasRentalParseResults && (
-        <div className="mb-6 bg-white p-6 rounded-lg shadow">
+        <div className="mb-6 bg-base-100 p-6 rounded-lg shadow">
           <h3 className="text-xl font-semibold mb-4">Rental Parse Results</h3>
           
           <div>
@@ -744,14 +744,14 @@ export default function XPathDebugDetailPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
                 <h4 className="font-medium mb-2">Buildings:</h4>
-                <div className="bg-gray-100 p-4 rounded overflow-auto" style={{ maxHeight: '60vh' }}>
+                <div className="bg-base-200 p-4 rounded overflow-auto" style={{ maxHeight: '60vh' }}>
                   <pre className="text-xs">{formatJson((actionData as RentalParseSuccessData).parseResults.buildings)}</pre>
                 </div>
               </div>
               
               <div>
                 <h4 className="font-medium mb-2">Rental Units (DB Format):</h4>
-                <div className="bg-gray-100 p-4 rounded overflow-auto" style={{ maxHeight: '60vh' }}>
+                <div className="bg-base-200 p-4 rounded overflow-auto" style={{ maxHeight: '60vh' }}>
                   <pre className="text-xs">{formatJson((actionData as RentalParseSuccessData).parseResults.rentalUnits)}</pre>
                 </div>
               </div>
@@ -762,7 +762,7 @@ export default function XPathDebugDetailPage() {
       
       {/* Parse Results (non-rental) */}
       {hasParseResults && !hasRentalParseResults && (
-        <div className="mb-6 bg-white p-6 rounded-lg shadow">
+        <div className="mb-6 bg-base-100 p-6 rounded-lg shadow">
           <h3 className="text-xl font-semibold mb-4">Parse Results</h3>
           
           <div>
@@ -770,7 +770,7 @@ export default function XPathDebugDetailPage() {
               <p><span className="font-medium">Items Found:</span> {(actionData as ParseSuccessData).parseResults.length}</p>
             </div>
             
-            <div className="bg-gray-100 p-4 rounded overflow-auto" style={{ maxHeight: '80vh' }}>
+            <div className="bg-base-200 p-4 rounded overflow-auto" style={{ maxHeight: '80vh' }}>
               <pre className="text-xs">{formatJson((actionData as ParseSuccessData).parseResults)}</pre>
             </div>
           </div>
@@ -779,7 +779,7 @@ export default function XPathDebugDetailPage() {
       
       {/* Query Results */}
       {actionData && !hasParseResults && !hasClassAnalysis && (
-        <div className="mb-6 bg-white p-6 rounded-lg shadow">
+        <div className="mb-6 bg-base-100 p-6 rounded-lg shadow">
           <h3 className="text-xl font-semibold mb-4">Query Results</h3>
           
           {hasError ? (
@@ -794,7 +794,7 @@ export default function XPathDebugDetailPage() {
                 <p><span className="font-medium">Matched Nodes:</span> {(actionData as SuccessActionData).count}</p>
               </div>
               
-              <div className="bg-gray-100 p-4 rounded overflow-auto" style={{ maxHeight: '80vh' }}>
+              <div className="bg-base-200 p-4 rounded overflow-auto" style={{ maxHeight: '80vh' }}>
                 <pre className="text-xs">{formatJson((actionData as SuccessActionData).results)}</pre>
               </div>
             </div>

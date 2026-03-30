@@ -145,7 +145,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
       
       {/* Status Display */}
       {currentStatus && (
-        <div className="mb-8 bg-white p-6 rounded-lg shadow">
+        <div className="mb-8 bg-base-100 p-6 rounded-lg shadow">
           <h3 className="text-xl font-semibold mb-4">Current Status</h3>
           
           <div className="mb-4">
@@ -165,13 +165,13 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
             
             {currentStatus.status === 'running' && (
               <>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div className="w-full bg-base-300 rounded-full h-2.5">
                 <div 
                   className="bg-green-600 h-2.5 rounded-full" 
                   style={{ width: `${sectionsProgressPercentage}%` }}
                 ></div>
               </div>
-              <div className="w-full mt-2 bg-gray-200 rounded-full h-2.5">
+              <div className="w-full mt-2 bg-base-300 rounded-full h-2.5">
                 <div 
                   className="bg-blue-600 h-2.5 rounded-full" 
                   style={{ width: `${progressPercentage}%` }}
@@ -228,7 +228,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
       )}
       
       {/* Start New Retrieval Form */}
-      <div className="bg-white p-6 rounded-lg shadow">
+      <div className="bg-base-100 p-6 rounded-lg shadow">
         <h3 className="text-xl font-semibold mb-4">Start New Retrieval</h3>
         
         {actionData && (
@@ -241,11 +241,11 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
           <input type="hidden" name="_action" value="start" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
-              <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">Property Type</label>
+              <label htmlFor="type" className="block text-sm font-medium text-base-content/70 mb-1">Property Type</label>
               <select 
                 id="type" 
                 name="type" 
-                className="w-full p-2 border border-gray-300 rounded-md"
+                className="w-full p-2 border border-base-300 rounded-md"
                 disabled={isSubmitting || (currentStatus?.status === 'running')}
               >
                 <option value="all">All Property Types</option>
@@ -256,11 +256,11 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
             </div>
             
             <div>
-              <label htmlFor="region" className="block text-sm font-medium text-gray-700 mb-1">Region</label>
+              <label htmlFor="region" className="block text-sm font-medium text-base-content/70 mb-1">Region</label>
               <select 
                 id="region" 
                 name="region" 
-                className="w-full p-2 border border-gray-300 rounded-md"
+                className="w-full p-2 border border-base-300 rounded-md"
                 disabled={isSubmitting || (currentStatus?.status === 'running')}
                 value={selectedRegion}
                 onChange={(e) => setSelectedRegion(e.target.value)}
@@ -273,11 +273,11 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
             </div>
             
             <div>
-              <label htmlFor="province" className="block text-sm font-medium text-gray-700 mb-1">Province</label>
+              <label htmlFor="province" className="block text-sm font-medium text-base-content/70 mb-1">Province</label>
               <select 
                 id="province" 
                 name="province" 
-                className="w-full p-2 border border-gray-300 rounded-md"
+                className="w-full p-2 border border-base-300 rounded-md"
                 disabled={isSubmitting || (currentStatus?.status === 'running') || selectedRegion === "all"}
               >
                 <option value="all">All Provinces</option>
@@ -292,10 +292,10 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
                 type="checkbox" 
                 id="refresh" 
                 name="refresh" 
-                className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 border-base-300 rounded"
                 disabled={isSubmitting || (currentStatus?.status === 'running')}
               />
-              <label htmlFor="refresh" className="ml-2 block text-sm text-gray-700">
+              <label htmlFor="refresh" className="ml-2 block text-sm text-base-content/70">
                 Refresh (clear existing pages)
               </label>
             </div>

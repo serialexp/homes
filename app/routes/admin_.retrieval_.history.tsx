@@ -155,70 +155,70 @@ export default function RetrievalHistoryPage() {
       
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Total Jobs</h3>
+        <div className="bg-base-100 p-4 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-base-content/60">Total Jobs</h3>
           <p className="text-2xl font-bold">{stats.total}</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Completed</h3>
+        <div className="bg-base-100 p-4 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-base-content/60">Completed</h3>
           <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Failed</h3>
+        <div className="bg-base-100 p-4 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-base-content/60">Failed</h3>
           <p className="text-2xl font-bold text-red-600">{stats.failed}</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Cancelled</h3>
+        <div className="bg-base-100 p-4 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-base-content/60">Cancelled</h3>
           <p className="text-2xl font-bold text-yellow-600">{stats.cancelled}</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Success Rate</h3>
+        <div className="bg-base-100 p-4 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-base-content/60">Success Rate</h3>
           <p className="text-2xl font-bold">{stats.successRate}%</p>
         </div>
       </div>
       
       {/* Jobs Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-base-100 rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-base-300">
+          <thead className="bg-base-200">
             <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Filters</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pages</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">ID</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Status</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Started</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Duration</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Filters</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Items</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Pages</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-base-100 divide-y divide-base-300">
             {jobsData.jobs.map((job: SerializedRetrievalJob) => (
-              <tr key={job.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{job.id}</td>
+              <tr key={job.id} className="hover:bg-base-200">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-base-content">{job.id}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(job.status)}`}>
                     {job.status.toUpperCase()}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-base-content/60">
                   {new Date(job.startTime).toLocaleString()}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-base-content/60">
                   {formatDuration(job.startTime, job.endTime)}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-base-content/60">
                   {job.region ? `Region: ${job.region}` : ''}
                   {job.province ? `, Province: ${job.province}` : ''}
                   {job.type ? `, Type: ${job.type}` : ''}
                   {job.refresh ? ', Refresh: Yes' : ''}
                   {!job.region && !job.province && !job.type && !job.refresh ? 'None' : ''}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-base-content/60">
                   {job.processedItems} / {job.totalItems}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-base-content/60">
                   {job.downloadedPages} / {job.totalPages}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -240,7 +240,7 @@ export default function RetrievalHistoryPage() {
             
             {jobsData.jobs.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
+                <td colSpan={8} className="px-6 py-4 text-center text-sm text-base-content/60">
                   No retrieval jobs found
                 </td>
               </tr>
@@ -261,7 +261,7 @@ export default function RetrievalHistoryPage() {
                 className={`px-4 py-2 text-sm font-medium ${
                   page === currentPage
                     ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                    : 'bg-base-100 text-base-content/70 hover:bg-base-200'
                 } ${
                   page === 1 ? 'rounded-l-md' : ''
                 } ${

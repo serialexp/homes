@@ -50,9 +50,9 @@ export default function RentalAreasPage() {
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {Object.entries(areas).map(([areaId, area]) => (
-          <div key={areaId} className="bg-white border border-gray-200 rounded-lg shadow p-6">
+          <div key={areaId} className="bg-base-100 border border-base-300 rounded-lg shadow p-6">
             <h3 className="text-xl font-semibold mb-1">{area.name}</h3>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-base-content/60 mb-4">
               {Object.values(countsByProvince[areaId] || {}).reduce((a, b) => a + b, 0).toLocaleString()} units
             </p>
             <div className="space-y-2">
@@ -62,10 +62,10 @@ export default function RentalAreasPage() {
                 <Link
                   key={provinceId}
                   to={`/rental/properties/${selectedType.id}/${areaId}/${provinceId}`}
-                  className="flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 rounded"
+                  className="flex justify-between items-center p-3 bg-base-200 hover:bg-base-200 rounded"
                 >
                   <span>{String(provinceName)}</span>
-                  <span className="text-sm text-gray-500">{count.toLocaleString()}</span>
+                  <span className="text-sm text-base-content/60">{count.toLocaleString()}</span>
                 </Link>
                 );
               })}

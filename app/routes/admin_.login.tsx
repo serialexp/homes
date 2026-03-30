@@ -39,13 +39,13 @@ export default function AdminLogin() {
   const redirectTo = searchParams.get("redirectTo") || "/admin";
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Admin Login</h2>
+    <div className="min-h-screen bg-base-200 flex items-center justify-center">
+      <div className="bg-base-100 p-8 rounded-lg shadow-md w-full max-w-sm">
+        <h2 className="text-2xl font-bold text-base-content mb-6 text-center">Admin Login</h2>
         <Form method="post">
           <input type="hidden" name="redirectTo" value={redirectTo} />
           <div className="mb-4">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-base-content/70 mb-1">
               Password
             </label>
             <input
@@ -54,7 +54,7 @@ export default function AdminLogin() {
               type="password"
               required
               autoFocus
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-base-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           {actionData?.error && (

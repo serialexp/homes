@@ -311,10 +311,10 @@ export default function RentalPropertiesPage() {
       {/* Image Modal */}
       {selectedImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75" onClick={closeImageModal}>
-          <div className="relative max-w-4xl max-h-[90vh] p-2 bg-white rounded-lg" onClick={e => e.stopPropagation()}>
+          <div className="relative max-w-4xl max-h-[90vh] p-2 bg-base-100 rounded-lg" onClick={e => e.stopPropagation()}>
             <button 
               onClick={closeImageModal}
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+              className="absolute top-2 right-2 text-base-content/60 hover:text-base-content/70"
               aria-label="Close modal"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -337,7 +337,7 @@ export default function RentalPropertiesPage() {
         <h2 className="text-2xl font-bold mt-2">
           {selectedType.name} Properties in {selectedProvince.name}, {selectedArea.name}
         </h2>
-        <p className="text-gray-600 mt-1">Found {countTotal} buildings</p>
+        <p className="text-base-content/70 mt-1">Found {countTotal} buildings</p>
       </div>
 
       {/* Filters */}
@@ -409,16 +409,16 @@ export default function RentalPropertiesPage() {
       </div>
 
       {buildings.length === 0 ? (
-        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+        <div className="bg-warning/10 border border-warning/30 p-4 rounded-lg">
           <p>No rental properties found matching these criteria.</p>
         </div>
       ) : (
         <>
           <div className="space-y-6">
             {buildings.map((building) => (
-              <div key={building.id} className="bg-white border border-gray-200 rounded-lg shadow overflow-hidden">
+              <div key={building.id} className="bg-base-100 border border-base-300 rounded-lg shadow overflow-hidden">
                 {/* Building Information */}
-                <div className="p-3 sm:p-6 border-b border-gray-200">
+                <div className="p-3 sm:p-6 border-b border-base-300">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
                     <div>
                       <h3 className="text-lg sm:text-xl font-semibold mb-2">{building.title || building.address}</h3>
@@ -450,7 +450,7 @@ export default function RentalPropertiesPage() {
                             </ul>
                           );
                         } catch {
-                          return <p className="text-gray-500">No station information available</p>;
+                          return <p className="text-base-content/60">No station information available</p>;
                         }
                       })()}
                     </div>
@@ -464,7 +464,7 @@ export default function RentalPropertiesPage() {
                   {/* Mobile: card layout */}
                   <div className="sm:hidden space-y-3">
                     {building.rentalUnits.map((unit) => (
-                      <div key={unit.id} className="flex gap-3 p-2 bg-gray-50 rounded-lg">
+                      <div key={unit.id} className="flex gap-3 p-2 bg-base-200 rounded-lg">
                         <div className="flex-shrink-0">
                           {unit.image_urls?.split(',').slice(0, 1).map((image: string, index: number) => (
                             <img
@@ -488,10 +488,10 @@ export default function RentalPropertiesPage() {
                               Suumo
                             </a>
                           </div>
-                          <div className="text-sm text-gray-600 mt-0.5">
+                          <div className="text-sm text-base-content/70 mt-0.5">
                             {unit.layout} · {unit.size_text || `${unit.size}m²`} · {unit.floor}F
                           </div>
-                          <div className="text-xs text-gray-500 mt-0.5">
+                          <div className="text-xs text-base-content/60 mt-0.5">
                             Mgmt {unit.management_fee_text || formatPrice(unit.management_fee)} · Dep {unit.deposit || '-'} · Grat {unit.gratuity || '-'}
                           </div>
                         </div>
@@ -503,7 +503,7 @@ export default function RentalPropertiesPage() {
                   <div className="hidden sm:block overflow-x-auto">
                     <table className="min-w-full">
                       <thead>
-                        <tr className="bg-gray-50">
+                        <tr className="bg-base-200">
                           <th></th>
                           <th className="py-2 px-3 text-left text-sm">Floor</th>
                           <th className="py-2 px-3 text-left text-sm">Layout</th>
@@ -515,9 +515,9 @@ export default function RentalPropertiesPage() {
                           <th className="py-2 px-3 text-center text-sm">Link</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-base-300">
                         {building.rentalUnits.map((unit) => (
-                          <tr key={unit.id} className="hover:bg-gray-50">
+                          <tr key={unit.id} className="hover:bg-base-200">
                             <td className="py-1 px-2">
                               <div className="flex gap-1">
                                 {unit.image_urls?.split(',').slice(0, 2).map((image: string, index: number) => (
@@ -543,7 +543,7 @@ export default function RentalPropertiesPage() {
                             <td className="py-1 px-3 text-sm">
                               <div>{unit.deposit || '-'} / {unit.gratuity || '-'}</div>
                             </td>
-                            <td className="py-1 px-3 text-xs text-gray-600">
+                            <td className="py-1 px-3 text-xs text-base-content/70">
                               {formatAge(unit.insert_date as unknown as string)}
                             </td>
                             <td className="py-1 px-3 text-center">
@@ -563,7 +563,7 @@ export default function RentalPropertiesPage() {
                   </div>
 
                   {building.rentalUnits.length === 20 && (
-                    <div className="mt-3 text-center text-xs text-gray-500">
+                    <div className="mt-3 text-center text-xs text-base-content/60">
                       Showing first 20 units by rent.
                     </div>
                   )}
@@ -581,7 +581,7 @@ export default function RentalPropertiesPage() {
                   disabled={currentPage <= 1}
                   className={`mx-1 px-3 py-1 rounded ${
                     currentPage <= 1 
-                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                      ? 'bg-base-300 text-base-content/60 cursor-not-allowed' 
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                 >
@@ -634,7 +634,7 @@ export default function RentalPropertiesPage() {
                   disabled={currentPage >= totalPages}
                   className={`mx-1 px-3 py-1 rounded ${
                     currentPage >= totalPages
-                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      ? 'bg-base-300 text-base-content/60 cursor-not-allowed'
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                 >

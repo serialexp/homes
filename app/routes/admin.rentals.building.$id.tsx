@@ -61,14 +61,14 @@ export default function BuildingDetails() {
         <h1 className="text-2xl font-bold">Building Details</h1>
         <Link 
           to="/admin/rentals" 
-          className="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+          className="px-3 py-1 bg-base-300 text-base-content rounded hover:bg-base-200"
         >
           Back to Buildings
         </Link>
       </div>
 
       {/* Building Details */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+      <div className="bg-base-100 rounded-lg shadow-md p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h2 className="text-xl font-semibold mb-4">{building.title || building.address}</h2>
@@ -93,7 +93,7 @@ export default function BuildingDetails() {
                 ))}
               </ul>
             ) : (
-              <p className="text-gray-500">No station information available</p>
+              <p className="text-base-content/60">No station information available</p>
             )}
             
             {building.main_image_url && (
@@ -110,13 +110,13 @@ export default function BuildingDetails() {
       </div>
 
       {/* Rental Units */}
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-base-100 rounded-lg shadow-md p-6">
         <h2 className="text-xl font-semibold mb-4">Rental Units ({pagination.totalItems})</h2>
         
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white">
+          <table className="min-w-full bg-base-100">
             <thead>
-              <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
+              <tr className="bg-base-200 text-base-content/70 uppercase text-sm leading-normal">
                 <th className="py-3 px-6 text-left">ID</th>
                 <th className="py-3 px-6 text-left">Floor</th>
                 <th className="py-3 px-6 text-left">Layout</th>
@@ -127,9 +127,9 @@ export default function BuildingDetails() {
                 <th className="py-3 px-6 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="text-gray-600 text-sm">
+            <tbody className="text-base-content/70 text-sm">
               {rentalUnits.map((unit: any) => (
-                <tr key={unit.id} className="border-b border-gray-200 hover:bg-gray-50">
+                <tr key={unit.id} className="border-b border-base-300 hover:bg-base-200">
                   <td className="py-3 px-6 text-left">{unit.id}</td>
                   <td className="py-3 px-6 text-left">{unit.floor}</td>
                   <td className="py-3 px-6 text-left">{unit.layout}</td>
@@ -158,20 +158,20 @@ export default function BuildingDetails() {
               {pagination.currentPage > 1 && (
                 <Link
                   to={`/admin/rentals/building/${building.id}?page=${pagination.currentPage - 1}`}
-                  className="px-3 py-1 bg-gray-200 text-gray-800 rounded-l hover:bg-gray-300"
+                  className="px-3 py-1 bg-base-300 text-base-content rounded-l hover:bg-base-200"
                 >
                   Previous
                 </Link>
               )}
               
-              <span className="px-4 py-1 bg-gray-100">
+              <span className="px-4 py-1 bg-base-200">
                 Page {pagination.currentPage} of {pagination.totalPages}
               </span>
               
               {pagination.currentPage < pagination.totalPages && (
                 <Link
                   to={`/admin/rentals/building/${building.id}?page=${pagination.currentPage + 1}`}
-                  className="px-3 py-1 bg-gray-200 text-gray-800 rounded-r hover:bg-gray-300"
+                  className="px-3 py-1 bg-base-300 text-base-content rounded-r hover:bg-base-200"
                 >
                   Next
                 </Link>

@@ -202,7 +202,7 @@ export default function PropertiesPage() {
       return (
         <div>
           <div>{property.property_name}</div>
-          <div className="text-gray-500 italic text-sm">{property.translated_property_name}</div>
+          <div className="text-base-content/60 italic text-sm">{property.translated_property_name}</div>
         </div>
       );
     }
@@ -215,7 +215,7 @@ export default function PropertiesPage() {
       return (
         <div>
           <div>{property.title}</div>
-          <div className="text-gray-500 italic text-sm">{property.translated_title}</div>
+          <div className="text-base-content/60 italic text-sm">{property.translated_title}</div>
         </div>
       );
     }
@@ -231,18 +231,18 @@ export default function PropertiesPage() {
         <h2 className="text-2xl font-bold mt-2">
           {selectedType.name} Properties in {selectedProvince.name}, {selectedArea.name}
         </h2>
-        <p className="text-gray-600 mt-1">Found {countTotal} properties</p>
+        <p className="text-base-content/70 mt-1">Found {countTotal} properties</p>
       </div>
       
       {properties.length === 0 ? (
-        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+        <div className="bg-warning/10 border border-warning/30 p-4 rounded-lg">
           <p>No properties found matching these criteria.</p>
         </div>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {properties.map((property) => (
-              <div key={property.id} className="bg-white border border-gray-200 rounded-lg shadow overflow-hidden">
+              <div key={property.id} className="bg-base-100 border border-base-300 rounded-lg shadow overflow-hidden">
                 <div className="p-5">
                   <h3 className="text-xl font-semibold mb-2 truncate">{property.address}</h3>
                   <img 
@@ -255,22 +255,22 @@ export default function PropertiesPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm mb-4">
                     <div>
-                      <span className="text-gray-600">Area:</span> {formatArea(property.area)}
+                      <span className="text-base-content/70">Area:</span> {formatArea(property.area)}
                     </div>
                     {property.building_area > 0 && (
                       <div>
-                        <span className="text-gray-600">Building:</span> {formatArea(property.building_area)}
+                        <span className="text-base-content/70">Building:</span> {formatArea(property.building_area)}
                       </div>
                     )}
                     <div>
-                      <span className="text-gray-600">Station:</span> {property.train_station}
+                      <span className="text-base-content/70">Station:</span> {property.train_station}
                     </div>
                     <div>
-                      <span className="text-gray-600">Distance:</span> {property.station_distance} min walk
+                      <span className="text-base-content/70">Distance:</span> {property.station_distance} min walk
                     </div>
                     {property.property_name && (
                       <div className="col-span-2 mt-2">
-                        <span className="text-gray-600">Name:</span> {getPropertyName(property)}
+                        <span className="text-base-content/70">Name:</span> {getPropertyName(property)}
                       </div>
                     )}
                   </div>
@@ -303,7 +303,7 @@ export default function PropertiesPage() {
                 disabled={currentPage <= 1}
                 className={`mx-1 px-3 py-1 rounded ${
                   currentPage <= 1 
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                    ? 'bg-base-300 text-base-content/60 cursor-not-allowed' 
                     : 'bg-blue-600 text-white hover:bg-blue-700'
                 }`}
               >
@@ -357,7 +357,7 @@ export default function PropertiesPage() {
                 disabled={currentPage >= totalPages}
                 className={`mx-1 px-3 py-1 rounded ${
                   currentPage >= totalPages
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    ? 'bg-base-300 text-base-content/60 cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
                 }`}
               >
@@ -371,13 +371,13 @@ export default function PropertiesPage() {
       {/* Property Details Modal */}
       {selectedProperty && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-base-100 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
                 <h2 className="text-2xl font-bold">{selectedProperty.address}</h2>
                 <button 
                   onClick={closePropertyDetails}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-base-content/60 hover:text-base-content/70"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -536,7 +536,7 @@ export default function PropertiesPage() {
                   {selectedProperty.additional_fields && (
                     <div className="mb-4">
                       <h3 className="text-lg font-semibold mb-2">Additional Information</h3>
-                      <div className="bg-gray-50 p-4 rounded-lg">
+                      <div className="bg-base-200 p-4 rounded-lg">
                         <pre className="whitespace-pre-wrap text-sm">
                           {selectedProperty.additional_fields}
                         </pre>
