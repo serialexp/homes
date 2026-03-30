@@ -38,4 +38,4 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trigger Portainer redeploy
-        run: curl -X POST https://portainer.jp.serial-experiments.com/api/stacks/webhooks/a656e744-0634-41a9-ae2c-3b5db46985a6
+        run: curl -X POST https://portainer.jp.serial-experiments.com/api/stacks/webhooks/5834edec-6363-4c9c-b534-1b4e04f0ff84
