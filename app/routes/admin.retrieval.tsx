@@ -3,6 +3,7 @@ import { Form, useActionData, useLoaderData, useNavigation, useSubmit, Link } fr
 import { useEffect, useState } from "react";
 import { propertyTypes, areas } from "../data/propertyData.js";
 import { startRetrieval, getRetrievalProcessStatus, cancelRetrieval } from "../services/retrieveCommandService.server.js";
+import { storeRetrievalStatus } from "../services/redis.server.js";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const status = await getRetrievalProcessStatus();
@@ -13,6 +14,19 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const action = formData.get("_action") as string;
   
+  if (action === "reset") {
+    await storeRetrievalStatus({
+      status: 'idle',
+      message: 'Status reset by admin',
+      progress: 0,
+      total: 0,
+      startTime: new Date(),
+      sectionsToFetch: 0,
+      sectionsProcessed: 0
+    });
+    return json({ success: true, message: "Status reset to idle" });
+  }
+
   if (action === "cancel") {
     try {
       const success = await cancelRetrieval();
@@ -90,6 +104,13 @@ export default function RetrievalPage() {
   const handleCancel = () => {
     const formData = new FormData();
     formData.append("_action", "cancel");
+    submit(formData, { method: "post" });
+  };
+
+  // Handle reset button click
+  const handleReset = () => {
+    const formData = new FormData();
+    formData.append("_action", "reset");
     submit(formData, { method: "post" });
   };
   
@@ -175,9 +196,9 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
             </div>
           </div>
           
-          {/* Cancel Button */}
+          {/* Cancel / Reset Buttons */}
           {currentStatus.status === 'running' && (
-            <div className="mt-4">
+            <div className="mt-4 flex space-x-2">
               <button
                 type="button"
                 onClick={handleCancel}
@@ -185,6 +206,14 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
                 disabled={isSubmitting}
               >
                 {isSubmitting ? "Cancelling..." : "Cancel Retrieval"}
+              </button>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="px-4 py-2 bg-gray-600 text-white font-medium rounded-md hover:bg-gray-700 disabled:bg-gray-400"
+                disabled={isSubmitting}
+              >
+                Force Reset
               </button>
             </div>
           )}
