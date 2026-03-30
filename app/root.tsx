@@ -109,7 +109,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
               <div className="container mx-auto flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <a href="/">
-                    <img src="/logo.png" alt="Japan Property Explorer" className="h-10" />
+                    <img src="/logo.png" alt="Japan Property Explorer" className="h-12 sm:h-14" />
                   </a>
                   {isAdmin && (
                     <>
