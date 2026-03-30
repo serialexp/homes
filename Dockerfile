@@ -32,8 +32,8 @@ COPY --from=build /app/app ./app
 COPY --from=build /app/src ./src
 COPY --from=build /app/prisma ./prisma
 
-# Install only production dependencies
-RUN npm install -g pnpm && pnpm install --prod
+# Install only production dependencies and regenerate Prisma client for this OS
+RUN npm install -g pnpm && pnpm install --prod && npx prisma generate
 
 # Set environment variables
 ENV NODE_ENV=production
