@@ -9,6 +9,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
     useLoaderData,
     useRouteError,
   } from "@remix-run/react";
+  import { SignIn, SignOut } from "@phosphor-icons/react";
   import { getSession } from "./utils/auth.server.js";
   import "./style.css"
 
@@ -123,6 +124,19 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
                       <a href="/admin/retrieval" className="text-blue-600 hover:text-blue-800">Admin</a>
                       <a href="/admin/xpath-debug" className="text-blue-600 hover:text-blue-800">XPath Debug</a>
                     </>
+                  )}
+                </div>
+                <div>
+                  {isAdmin ? (
+                    <form method="post" action="/admin/logout">
+                      <button type="submit" className="text-gray-400 hover:text-gray-600" title="Logout">
+                        <SignOut size={20} />
+                      </button>
+                    </form>
+                  ) : (
+                    <a href="/admin/login" className="text-gray-400 hover:text-gray-600" title="Login">
+                      <SignIn size={20} />
+                    </a>
                   )}
                 </div>
               </div>
