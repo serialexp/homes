@@ -95,15 +95,6 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
                 line-height: 1.5;
               }
               
-              h1 {
-                color: #2563eb;
-                padding: 1rem;
-                margin: 0;
-                border-bottom: 1px solid #e5e7eb;
-                background-color: white;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-              }
-              
               .container {
                 max-width: 1200px;
                 margin: 0 auto;
@@ -114,11 +105,12 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
         </head>
         <body>
           <header>
-            <h1>Japan Property Explorer</h1>
             <nav className="bg-white border-b border-gray-200 px-4 py-2">
               <div className="container mx-auto flex items-center justify-between">
-                <div className="flex space-x-4">
-                  <a href="/" className="text-blue-600 hover:text-blue-800">Home</a>
+                <div className="flex items-center space-x-4">
+                  <a href="/">
+                    <img src="/logo.png" alt="Japan Property Explorer" className="h-10" />
+                  </a>
                   {isAdmin && (
                     <>
                       <a href="/admin/retrieval" className="text-blue-600 hover:text-blue-800">Admin</a>
