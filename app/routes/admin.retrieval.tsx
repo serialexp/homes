@@ -89,7 +89,12 @@ export default function RetrievalPage() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const response = await fetch("/admin/retrieval/status");
+        const response = await fetch("/admin/retrieval/status", {
+          headers: { "Accept": "application/json" },
+        });
+        if (!response.ok) return;
+        const contentType = response.headers.get("content-type");
+        if (!contentType?.includes("application/json")) return;
         const data = await response.json();
         setCurrentStatus(data.status);
       } catch (error) {

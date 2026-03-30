@@ -43,13 +43,12 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: redis-server --save "" --appendonly no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3
-    volumes:
-      - redis-data:/data
 
 networks:
   caddy:
@@ -57,4 +56,3 @@ networks:
 
 volumes:
   mysql-data:
-  redis-data:

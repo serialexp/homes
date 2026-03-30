@@ -4,4 +4,4 @@ import { getRetrievalProcessStatus } from "../services/retrieveCommandService.se
 export async function loader({ request }: LoaderFunctionArgs) {
   const status = await getRetrievalProcessStatus();
   return json({ status });
-} 
+}
