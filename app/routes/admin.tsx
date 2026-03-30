@@ -4,7 +4,7 @@ import { requireAdminAuth } from "../utils/auth.server.js";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const authResponse = requireAdminAuth(request);
-  if (authResponse) throw authResponse;
+  if (authResponse) return authResponse;
   return null;
 }
 
