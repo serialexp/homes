@@ -1,5 +1,4 @@
 import RetrieveCommand from '../../src/commands/RetrieveCommand.js';
-import { areas, propertyTypes } from '../data/propertyData.js';
 import { storeRetrievalStatus, getRetrievalStatus, RetrievalStatus, isRetrievalCancelled, cancelRetrievalProcess, clearCancellationSignal, updateRetrievalStatusField } from './redis.server.js';
 import { createRetrievalJob, completeRetrievalJob } from './retrievalJobService.server.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -97,14 +96,13 @@ async function executeRetrieval(options: {
     let processedItems = 0;
     let sectionsToFetch = 0;
     let sectionsProcessed = 0;
-    let totalPages = 0;
-    let pagesDownloaded = 0;
+    let pagesProcessed = 0;
     let lastStatusUpdate = Date.now();
     const UPDATE_INTERVAL = 2000; // Update status at most every 2 seconds
     let processingStartTime: Date | null = null;
-    
-    // Track which phase we're in
-    let currentPhase: 'calculation' | 'download' | 'processing' = 'calculation';
+
+    // Track which phase we're in (2-phase model: calculation → retrieval)
+    let currentPhase: 'calculation' | 'retrieval' = 'calculation';
 
     // Override the original execute method to track progress
     const originalExecute = retrieveCommand.execute.bind(retrieveCommand);
@@ -126,48 +124,15 @@ async function executeRetrieval(options: {
         // Add event listeners for progress tracking
         retrieveCommand.on('total-items', (total) => {
           totalItems = total;
-          // Only update the fields that changed
           updateRetrievalStatusField({
             total: totalItems,
-            message: `Found ${total} items to process`
+            message: `Found ${total} items across all sections`
           });
-        });
-
-        // Listen for page download progress
-        retrieveCommand.on('page-download-progress', (pagesProcessed: number, pagesTotalNew: number) => {
-          pagesDownloaded = pagesProcessed;
-          totalPages = pagesTotalNew;
-
-          // Only update if we're in the download phase
-          if (currentPhase === 'download') {
-            const estimatedCompletionTime = processingStartTime
-              ? calculateEstimatedCompletionTime(processingStartTime, pagesDownloaded, totalPages)
-              : undefined;
-
-            updateRetrievalStatusField({
-              progress: pagesDownloaded,
-              total: totalPages,
-              estimatedCompletionTime,
-              message: `Downloading pages: ${pagesDownloaded}/${totalPages} pages (${Math.round((pagesDownloaded / totalPages) * 100)}%)`
-            });
-          }
-        });
-
-        // Listen for download progress
-        retrieveCommand.on('download-progress', (sectionsProcessed: number, sectionsTotal: number, itemsTotal: number) => {
-          // Only update if we're in the download phase
-          if (currentPhase === 'download') {
-            updateRetrievalStatusField({
-              message: `Downloading pages: ${sectionsProcessed}/${sectionsTotal} sections (${itemsTotal} items found)`,
-              sectionsProcessed,
-              sectionsToFetch: sectionsTotal
-            });
-          }
         });
 
         retrieveCommand.on('sections-to-fetch', (sectionsToFetchNew: number) => {
           sectionsToFetch = sectionsToFetchNew;
-          
+
           // Set processing start time when we first get sections to fetch
           if (!processingStartTime) {
             processingStartTime = new Date();
@@ -182,35 +147,23 @@ async function executeRetrieval(options: {
             });
           }
         });
-        
+
         retrieveCommand.on('sections-processed', (sectionsProcessedNew: number) => {
           sectionsProcessed = sectionsProcessedNew;
-          
-          // If sections processed is reset to 0, we're moving to a new phase
-          if (sectionsProcessedNew === 0) {
-            // Determine which phase we're moving to based on current phase
-            if (currentPhase === 'calculation') {
-              currentPhase = 'download';
-              processingStartTime = new Date();
-              updateRetrievalStatusField({
-                processingStartTime,
-                message: `Starting download phase for ${totalPages} pages across ${sectionsToFetch} sections`,
-                progress: 0,
-                total: totalPages
-              });
-            } else if (currentPhase === 'download') {
-              currentPhase = 'processing';
-              processingStartTime = new Date();
-              updateRetrievalStatusField({
-                processingStartTime,
-                message: `Starting processing phase for ${totalItems} items`,
-                progress: 0,
-                total: totalItems
-              });
-            }
+
+          // If sections processed is reset to 0, we're transitioning from calculation to retrieval
+          if (sectionsProcessedNew === 0 && currentPhase === 'calculation') {
+            currentPhase = 'retrieval';
+            processingStartTime = new Date();
+            updateRetrievalStatusField({
+              processingStartTime,
+              message: `Starting retrieval phase for ${sectionsToFetch} sections (${totalItems} items, sorted by recency)`,
+              progress: 0,
+              total: sectionsToFetch
+            });
             return;
           }
-          
+
           // Calculate estimated completion time
           if (processingStartTime && sectionsProcessed > 0) {
             const estimatedCompletionTime = calculateEstimatedCompletionTime(
@@ -218,22 +171,15 @@ async function executeRetrieval(options: {
               sectionsProcessed,
               sectionsToFetch
             );
-            
-            let message = '';
-            switch (currentPhase) {
-              case 'calculation':
-                message = `Calculation phase: ${sectionsProcessed}/${sectionsToFetch} sections`;
-                break;
-              case 'download':
-                message = `Download phase: ${sectionsProcessed}/${sectionsToFetch} sections (${pagesDownloaded}/${totalPages} pages)`;
-                break;
-              case 'processing':
-                message = `Processing phase: ${sectionsProcessed}/${sectionsToFetch} sections`;
-                break;
-            }
-            
+
+            const message = currentPhase === 'calculation'
+              ? `Calculation phase: ${sectionsProcessed}/${sectionsToFetch} sections`
+              : `Retrieval phase: ${sectionsProcessed}/${sectionsToFetch} sections`;
+
             updateRetrievalStatusField({
               sectionsProcessed,
+              progress: sectionsProcessed,
+              total: sectionsToFetch,
               estimatedCompletionTime,
               message
             });
@@ -243,35 +189,51 @@ async function executeRetrieval(options: {
             });
           }
         });
-        
-        retrieveCommand.on('items-processed', (newProcessedItems: number, regionId: string, provinceId: string, type: string) => {
-          processedItems = newProcessedItems;
-          
-          // Only update Redis if enough time has passed since the last update
+
+        // Per-section progress: tracks pages fetched and items found within a section
+        retrieveCommand.on('section-progress', (sectionKey: string, page: number, totalPages: number, newItems: number, updatedItems: number) => {
+          pagesProcessed++;
+
           const now = Date.now();
           if (now - lastStatusUpdate >= UPDATE_INTERVAL) {
             lastStatusUpdate = now;
-            
-            const areaName = areas[regionId as keyof typeof areas].name;
-            const provinceName = areas[regionId as keyof typeof areas].provinces[provinceId];
-            const propertyTypeName = propertyTypes[type as keyof typeof propertyTypes];
-
-            const estimatedCompletionTime = processingStartTime && processedItems > 0
-              ? calculateEstimatedCompletionTime(processingStartTime, processedItems, totalItems)
-              : undefined;
-
             updateRetrievalStatusField({
-              message: `Processing items in ${areaName} ${provinceName} ${propertyTypeName} (${processedItems}/${totalItems})`,
-              progress: processedItems,
-              total: totalItems,
-              estimatedCompletionTime
+              message: `Retrieving ${sectionKey}: page ${page}/${totalPages} (${newItems} new, ${updatedItems} updated)`
             });
           }
         });
 
-        // Add cancellation check only before fetching pages (not for every item)
+        retrieveCommand.on('section-early-stop', (sectionKey: string, page: number, totalPages: number) => {
+          updateRetrievalStatusField({
+            message: `${sectionKey}: caught up at page ${page}/${totalPages}, moving to next section`
+          });
+        });
+
+        retrieveCommand.on('section-timeout', (sectionKey: string, page: number, totalPages: number) => {
+          updateRetrievalStatusField({
+            message: `${sectionKey}: timed out at page ${page}/${totalPages}, moving to next section`
+          });
+        });
+
+        // Track total items processed across all sections for job completion reporting.
+        // items-processed emits cumulative count per section, so we track the last
+        // section key and reset when it changes.
+        let lastItemsSectionKey = '';
+        let lastSectionItemCount = 0;
+        retrieveCommand.on('items-processed', (sectionProcessedItems: number, regionId: string, provinceId: string, type: string) => {
+          const sectionKey = `${regionId}-${provinceId}-${type}`;
+          if (sectionKey !== lastItemsSectionKey) {
+            // New section started — the previous section's total was already accumulated
+            lastItemsSectionKey = sectionKey;
+            lastSectionItemCount = 0;
+          }
+          // Accumulate the delta since the last event within this section
+          processedItems += (sectionProcessedItems - lastSectionItemCount);
+          lastSectionItemCount = sectionProcessedItems;
+        });
+
+        // Add cancellation check before fetching pages
         retrieveCommand.on('before-page-fetch', async (page: number, totalPages: number) => {
-          // Check if the process has been cancelled
           const cancelled = await isRetrievalCancelled(processId);
           if (cancelled) {
             retrieveCommand.cancelled = true;
@@ -285,11 +247,11 @@ async function executeRetrieval(options: {
         await storeRetrievalStatus({
           status: 'completed',
           message: 'Retrieval process completed successfully',
-          progress: processedItems,
-          total: totalItems,
+          progress: sectionsProcessed,
+          total: sectionsToFetch,
           startTime: new Date(),
-          sectionsToFetch: sectionsToFetch,
-          sectionsProcessed: sectionsProcessed,
+          sectionsToFetch,
+          sectionsProcessed,
           endTime: new Date(),
           processId
         });
@@ -299,8 +261,8 @@ async function executeRetrieval(options: {
           status: 'completed',
           totalItems,
           processedItems,
-          totalPages,
-          downloadedPages: pagesDownloaded
+          totalPages: pagesProcessed,
+          downloadedPages: pagesProcessed
         });
 
         return result;
@@ -310,47 +272,44 @@ async function executeRetrieval(options: {
           await storeRetrievalStatus({
             status: 'cancelled',
             message: 'Retrieval process was cancelled by user',
-            progress: processedItems,
-            total: totalItems,
+            progress: sectionsProcessed,
+            total: sectionsToFetch,
             startTime: new Date(),
-            sectionsToFetch: sectionsToFetch,
-            sectionsProcessed: sectionsProcessed,
+            sectionsToFetch,
+            sectionsProcessed,
             endTime: new Date(),
             processId
           });
 
-          // Update the retrieval job record
           await completeRetrievalJob(processId, {
             status: 'cancelled',
             totalItems,
             processedItems,
-            totalPages,
-            downloadedPages: pagesDownloaded
+            totalPages: pagesProcessed,
+            downloadedPages: pagesProcessed
           });
         } else {
-          // Update status on error
           const errorMessage = error instanceof Error ? error.message : String(error);
-          
+
           await storeRetrievalStatus({
             status: 'failed',
             message: 'Retrieval process failed',
-            progress: processedItems,
-            total: totalItems,
+            progress: sectionsProcessed,
+            total: sectionsToFetch,
             startTime: new Date(),
-            sectionsToFetch: sectionsToFetch,
-            sectionsProcessed: sectionsProcessed,
+            sectionsToFetch,
+            sectionsProcessed,
             endTime: new Date(),
             error: errorMessage,
             processId
           });
 
-          // Update the retrieval job record
           await completeRetrievalJob(processId, {
             status: 'failed',
             totalItems,
             processedItems,
-            totalPages,
-            downloadedPages: pagesDownloaded,
+            totalPages: pagesProcessed,
+            downloadedPages: pagesProcessed,
             errorMessage
           });
         }

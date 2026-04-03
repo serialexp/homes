@@ -1,12 +1,9 @@
 import { DOMParser } from "@xmldom/xmldom";
 import prisma from '../../app/utils/db.server.js';
 import { EventEmitter } from 'events';
-import * as xpath from 'xpath';
-import * as fs from 'fs';
-import * as path from 'path';
 import { Prisma } from '@prisma/client';
-import { parseItems, parseItemsForDB, PropertyItemDB, simpleXPathSelect1 } from '../../app/utils/parseUtils.js';
-import { parseRentalBuildings, parseRentalUnitsForDB, RentalBuilding, RentalUnitDB } from '../../app/utils/rentalParseUtils.js';
+import { parseItemsForDB, PropertyItemDB, simpleXPathSelect1 } from '../../app/utils/parseUtils.js';
+import { parseRentalUnitsForDB, RentalUnitDB } from '../../app/utils/rentalParseUtils.js';
 import { processStationInfo } from '../../app/utils/trainUtils.server.js';
 
 interface InputInterface {
@@ -17,6 +14,11 @@ interface InputInterface {
 }
 
 class RetrieveCommand extends EventEmitter {
+  // 30 minute timeout per section as safety net
+  private static SECTION_TIMEOUT_MS = 30 * 60 * 1000;
+  // Number of consecutive all-known pages before stopping a section
+  private static EARLY_STOP_THRESHOLD = 2;
+
   // Add event declarations for TypeScript
   on(event: 'total-items', listener: (total: number) => void): this;
   on(event: 'sections-to-fetch', listener: (sections: number) => void): this;
@@ -24,8 +26,9 @@ class RetrieveCommand extends EventEmitter {
   on(event: 'items-processed', listener: (items: number, regionId: string, provinceId: string, type: string) => void): this;
   on(event: 'before-page-fetch', listener: (page: number, totalPages: number) => void): this;
   on(event: 'before-item-process', listener: (suumoId: string) => void): this;
-  on(event: 'download-progress', listener: (sectionsProcessed: number, sectionsTotal: number, itemsTotal: number) => void): this;
-  on(event: 'page-download-progress', listener: (pagesProcessed: number, totalPages: number) => void): this;
+  on(event: 'section-progress', listener: (sectionKey: string, page: number, totalPages: number, newItems: number, updatedItems: number) => void): this;
+  on(event: 'section-early-stop', listener: (sectionKey: string, page: number, totalPages: number) => void): this;
+  on(event: 'section-timeout', listener: (sectionKey: string, page: number, totalPages: number) => void): this;
   on(event: string, listener: (...args: any[]) => void): this {
     return super.on(event, listener);
   }
@@ -36,8 +39,9 @@ class RetrieveCommand extends EventEmitter {
   emit(event: 'items-processed', items: number, regionId: string, provinceId: string, type: string): boolean;
   emit(event: 'before-page-fetch', page: number, totalPages: number): boolean;
   emit(event: 'before-item-process', suumoId: string): boolean;
-  emit(event: 'download-progress', sectionsProcessed: number, sectionsTotal: number, itemsTotal: number): boolean;
-  emit(event: 'page-download-progress', pagesProcessed: number, totalPages: number): boolean;
+  emit(event: 'section-progress', sectionKey: string, page: number, totalPages: number, newItems: number, updatedItems: number): boolean;
+  emit(event: 'section-early-stop', sectionKey: string, page: number, totalPages: number): boolean;
+  emit(event: 'section-timeout', sectionKey: string, page: number, totalPages: number): boolean;
   emit(event: string, ...args: any[]): boolean {
     return super.emit(event, ...args);
   }
@@ -146,16 +150,12 @@ class RetrieveCommand extends EventEmitter {
     }
   };
 
-  // Base URL for purchase properties
-  private purchaseBase = 'https://suumo.jp/jj/bukken/ichiran/JJ012FC001/?ar={area}&bs={type}&ta={province}&pn={page}&ekTjCd=&ekTjNm=&kb=1&kj=9&km=1&kt=9999999&ta=13&tb=0&tj=0&tt=9999999&po=0&pj=1&pc=100';
+  // Base URL for purchase properties (sorted by 新着・更新順 = newest/updated first via po=1&pj=2)
+  private purchaseBase = 'https://suumo.jp/jj/bukken/ichiran/JJ012FC001/?ar={area}&bs={type}&ta={province}&pn={page}&ekTjCd=&ekTjNm=&kb=1&kj=9&km=1&kt=9999999&ta=13&tb=0&tj=0&tt=9999999&po=1&pj=2&pc=100';
+
+  // Base URL for rental properties (sorted by 新着順 = newest first via po1=09)
+  private rentalBase = 'https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar={area}&bs={type}&ta={province}&page={page}&pc=50&po1=09&cb=0.0&ct=9999999&et=9999999&cn=9999999&mb=0&mt=9999999&shkr1=03&shkr2=03&shkr3=03&shkr4=03&fw2=&srch_navi=1';
   
-  // Base URL for rental properties
-  private rentalBase = 'https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar={area}&bs={type}&ta={province}&page={page}&pc=50&cb=0.0&ct=9999999&et=9999999&cn=9999999&mb=0&mt=9999999&shkr1=03&shkr2=03&shkr3=03&shkr4=03&fw2=&srch_navi=1';
-                      //https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar=030&bs=040&ta=13&pc=50&cb=0.0&ct=9999999&mb=0&mt=9999999&et=9999999&cn=9999999&shkr1=03&shkr2=03&shkr3=03&shkr4=03&sngz=&po1=25
-                      //https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar=030&bs=040&ta=13&page=2&pc=50&cb=0.0&ct=9999999&et=9999999&cn=9999999&mb=0&mt=9999999&shkr1=03&shkr2=03&shkr3=03&shkr4=03&fw2=&srch_navi=1
-  
-  private perPage = 100;
-  private existingIds: Set<string> = new Set();
   public cancelled = false;
 
   public async execute(input: InputInterface) {
@@ -164,13 +164,9 @@ class RetrieveCommand extends EventEmitter {
       throw new Error("Need DATABASE_URL to be defined.")
     }
 
-    if (input.refresh) {
-      await prisma.page.deleteMany();
-    }
-
-    // Load existing IDs and their details
+    // Load existing purchase property IDs and their details
     const existingProperties = await prisma.property.findMany({
-      select: { 
+      select: {
         id: true,
         suumo_id: true,
         price: true,
@@ -178,11 +174,10 @@ class RetrieveCommand extends EventEmitter {
         last_updated: true
       }
     });
-    
+
     // Create a map of existing properties by suumo_id for quick lookup
     const existingPropertiesMap: Record<string, { id: number, price: number, price_text: string | null, last_updated: Date }> = {};
     existingProperties.forEach(item => {
-      this.existingIds.add(item.suumo_id);
       existingPropertiesMap[item.suumo_id] = {
         id: item.id,
         price: item.price,
@@ -191,10 +186,22 @@ class RetrieveCommand extends EventEmitter {
       };
     });
 
+    // Load existing rental unit IDs upfront for early termination checks
+    const existingRentalUnits = await prisma.rentalUnit.findMany({
+      select: {
+        suumo_id: true,
+        rent: true
+      }
+    });
+    const existingRentalUnitMap: Record<string, { rent: number }> = {};
+    for (const unit of existingRentalUnits) {
+      existingRentalUnitMap[unit.suumo_id] = { rent: unit.rent };
+    }
+
     // Count the number of sections to fetch
     let sectionsToFetch = 0;
     const sectionsToProcess: Array<{regionId: string, provinceId: string, type: string}> = [];
-    
+
     for (const [typeId, typeName] of Object.entries(this.types)) {
       if (input.type && typeId !== input.type) {
         continue;
@@ -212,252 +219,224 @@ class RetrieveCommand extends EventEmitter {
         }
       }
     }
-    
+
     // Emit the sections to fetch
     this.emit('sections-to-fetch', sectionsToFetch);
-    
-    // Phase 1: First pass - Calculate total pages across all sections
+
+    // Phase 1: Calculation - fetch page 1 of each section to determine total items/pages
     console.log(`Starting calculation phase for ${sectionsToFetch} sections`);
     let sectionsCalculated = 0;
     let totalItems = 0;
-    let totalPages = 0;
-    
-    // Map to store page counts for each section
+
+    // Map to store first page documents and page counts for each section
     const sectionPageCounts: Map<string, number> = new Map();
-    
-    // First pass: Calculate total pages for all sections
+    const sectionFirstPages: Map<string, Document> = new Map();
+
     for (const section of sectionsToProcess) {
       if (this.cancelled) {
         console.log('Calculation phase cancelled');
         break;
       }
-      
+
       const { regionId, provinceId, type } = section;
       const sectionKey = `${regionId}-${provinceId}-${type}`;
-      
-      try {        
-        // Check cancellation again right before the potentially long-running operation
+
+      try {
         if (this.cancelled) {
           console.log('Calculation phase cancelled');
           break;
         }
-        
-        // Get the first page to determine total items for this section
-        const firstPage = await this.getPage(1, regionId, provinceId, type);
+
+        // Fetch the first page directly (no caching — pages are sorted by recency and change every run)
+        const firstPage = await this.fetchPageFromSuumo(1, regionId, provinceId, type);
         const sectionTotalItems = this.getTotalItems(firstPage);
         totalItems += sectionTotalItems;
-        
-        // Calculate total pages for this section
+
         const sectionTotalPages = this.getTotalPages(firstPage);
         sectionPageCounts.set(sectionKey, sectionTotalPages);
-        totalPages += sectionTotalPages;
-        
-        // Emit progress for this section calculation
+        sectionFirstPages.set(sectionKey, firstPage);
+
         sectionsCalculated++;
         this.emit('sections-processed', sectionsCalculated);
-        
+
         console.log(`Section ${sectionKey}: ${sectionTotalItems} items, ${sectionTotalPages} pages`);
       } catch (error) {
         console.error(`Error calculating section ${sectionKey}:`, error);
       }
     }
-    
-    // Phase 2: Download all pages
-    console.log(`Starting download phase for ${totalPages} pages across ${sectionsToFetch} sections`);
-    let pagesDownloaded = 0;
-    let sectionsProcessed = 0;
-    
-    const currentlyCachedKeys = await prisma.page.findMany({
-      select: {
-        url: true
-      }
-    });
-    const currentlyCachedKeysSet = new Set(currentlyCachedKeys.map(page => page.url));
 
-    // Reset sections processed counter for the download phase
+    this.emit('total-items', totalItems);
+
+    // Phase 2: Retrieval - for each section, fetch pages and process them immediately.
+    // Stop early when we reach properties we already know about (sorted by recency).
+    console.log(`Starting retrieval phase for ${sectionsToFetch} sections`);
+    let sectionsProcessed = 0;
+
+    // Signal transition to retrieval phase
     this.emit('sections-processed', 0);
-    
-    // Second pass: Download all pages for all sections
+
     for (const section of sectionsToProcess) {
       if (this.cancelled) {
-        console.log('Download phase cancelled');
+        console.log('Retrieval phase cancelled');
         break;
       }
-      
+
       const { regionId, provinceId, type } = section;
       const sectionKey = `${regionId}-${provinceId}-${type}`;
       const sectionTotalPages = sectionPageCounts.get(sectionKey) || 0;
-      
+      const firstPage = sectionFirstPages.get(sectionKey);
+
+      if (!firstPage || sectionTotalPages === 0) {
+        sectionsProcessed++;
+        this.emit('sections-processed', sectionsProcessed);
+        continue;
+      }
+
+      const region = this.areas[regionId as keyof typeof this.areas];
+      const provinceName = region?.provinces[provinceId as keyof typeof region.provinces] || provinceId;
+      const propertyType = this.types[type as keyof typeof this.types] || 'Unknown';
+      console.log(`Retrieving ${propertyType} in ${region?.name}, ${provinceName}`);
+
+      const sectionStartTime = Date.now();
+      let consecutiveAllKnownPages = 0;
+      let sectionProcessedItems = 0;
+      let sectionNewItems = 0;
+      let sectionUpdatedItems = 0;
+      let earlyStop = false;
+      let timedOut = false;
+
       try {
-        // The first page was already downloaded during calculation phase
-        pagesDownloaded++;
-        this.emit('page-download-progress', pagesDownloaded, totalPages);
-        
-        // Download remaining pages for this section
-        for (let page = 2; page <= sectionTotalPages; page++) {
+        for (let page = 1; page <= sectionTotalPages; page++) {
           if (this.cancelled) {
-            console.log('Download phase cancelled');
+            console.log('Retrieval cancelled');
             break;
           }
-          
+
+          // Check 30-minute section timeout
+          const elapsed = Date.now() - sectionStartTime;
+          if (elapsed > RetrieveCommand.SECTION_TIMEOUT_MS) {
+            console.log(`Section ${sectionKey} timed out after ${Math.round(elapsed / 60000)} minutes on page ${page}/${sectionTotalPages}`);
+            this.emit('section-timeout', sectionKey, page, sectionTotalPages);
+            timedOut = true;
+            break;
+          }
+
           // Emit event before fetching page to allow for cancellation
           this.emit('before-page-fetch', page, sectionTotalPages);
-          
-          // Download the page
-          const pageUrl = this.getPageUrl(page, regionId, provinceId, type);
-          if (currentlyCachedKeysSet.has(pageUrl)) {
-            pagesDownloaded++;
-            this.emit('page-download-progress', pagesDownloaded, totalPages);
-            continue;
+
+          // Get the page document (page 1 was already fetched in calculation phase)
+          let document: Document;
+          if (page === 1) {
+            document = firstPage;
+          } else {
+            document = await this.fetchPageFromSuumo(page, regionId, provinceId, type);
           }
-          await this.getPage(page, regionId, provinceId, type);
-          pagesDownloaded++;
-          this.emit('page-download-progress', pagesDownloaded, totalPages);
+
+          // Parse and process items immediately
+          let pageNewItems = 0;
+          let pageUpdatedItems = 0;
+          let pageKnownUnchangedItems = 0;
+          let pageTotalItems = 0;
+
+          if (type === '040') {
+            // Rental properties
+            const propertyItems = parseRentalUnitsForDB(document, regionId, provinceId);
+            pageTotalItems = propertyItems.length;
+
+            if (pageTotalItems === 0) {
+              console.log(`No items found on page ${page}`);
+              break;
+            }
+
+            // Check early termination before processing: count known vs new units
+            for (const item of propertyItems) {
+              if (item.building_suumo_id === 'building-') continue;
+              const existingUnit = existingRentalUnitMap[item.suumo_id];
+              if (existingUnit) {
+                if (existingUnit.rent !== item.rent) {
+                  pageUpdatedItems++;
+                } else {
+                  pageKnownUnchangedItems++;
+                }
+              } else {
+                pageNewItems++;
+              }
+            }
+
+            // Process the rental items (handles DB writes)
+            await this.processRentalItems(propertyItems, regionId, provinceId);
+
+            // Update the in-memory map with newly seen units
+            for (const item of propertyItems) {
+              existingRentalUnitMap[item.suumo_id] = { rent: item.rent };
+            }
+          } else {
+            // Purchase properties
+            const propertyItems = parseItemsForDB(document, regionId, provinceId);
+            pageTotalItems = propertyItems.length;
+
+            if (pageTotalItems === 0) {
+              console.log(`No items found on page ${page}`);
+              break;
+            }
+
+            // Check early termination before processing: count known vs new properties
+            for (const item of propertyItems) {
+              const existing = existingPropertiesMap[item.suumo_id];
+              if (existing) {
+                if (existing.price !== item.price || existing.price_text !== item.price_text) {
+                  pageUpdatedItems++;
+                } else {
+                  pageKnownUnchangedItems++;
+                }
+              } else {
+                pageNewItems++;
+              }
+            }
+
+            // Process the purchase items (handles DB writes)
+            await this.processPurchaseItems(propertyItems, regionId, provinceId, existingPropertiesMap);
+          }
+
+          sectionProcessedItems += pageTotalItems;
+          sectionNewItems += pageNewItems;
+          sectionUpdatedItems += pageUpdatedItems;
+
+          this.emit('section-progress', sectionKey, page, sectionTotalPages, pageNewItems, pageUpdatedItems);
+          this.emit('items-processed', sectionProcessedItems, regionId, provinceId, type);
+
+          // Early termination check: if all items on this page were already known
+          // with no changes, increment the counter. Otherwise, reset.
+          if (pageNewItems === 0 && pageUpdatedItems === 0 && pageTotalItems > 0) {
+            consecutiveAllKnownPages++;
+            if (consecutiveAllKnownPages >= RetrieveCommand.EARLY_STOP_THRESHOLD) {
+              console.log(`Section ${sectionKey}: caught up after page ${page}/${sectionTotalPages} (${consecutiveAllKnownPages} consecutive all-known pages)`);
+              this.emit('section-early-stop', sectionKey, page, sectionTotalPages);
+              earlyStop = true;
+              break;
+            }
+          } else {
+            consecutiveAllKnownPages = 0;
+          }
         }
-        
-        // Emit progress for this section
-        sectionsProcessed++;
-        this.emit('sections-processed', sectionsProcessed);
-        this.emit('download-progress', sectionsProcessed, sectionsToFetch, totalItems);
+
+        const elapsed = Math.round((Date.now() - sectionStartTime) / 1000);
+        const stopReason = earlyStop ? 'caught up' : timedOut ? 'timed out' : 'completed all pages';
+        console.log(`Section ${sectionKey}: ${stopReason} in ${elapsed}s — ${sectionNewItems} new, ${sectionUpdatedItems} updated, ${sectionProcessedItems} total items`);
+
       } catch (error) {
-        console.error(`Error downloading section ${sectionKey}:`, error);
+        console.error(`Error retrieving section ${sectionKey}:`, error);
       }
+
+      sectionsProcessed++;
+      this.emit('sections-processed', sectionsProcessed);
     }
-    
-    // Emit the total items found
-    this.emit('total-items', totalItems);
-    console.log(`Download phase completed. Downloaded ${pagesDownloaded}/${totalPages} pages containing ${totalItems} items.`);
-    
-    // Phase 3: Process all downloaded pages
-    console.log('Starting processing phase');
-    sectionsProcessed = 0;
-    let processedItems = 0;
-    
-    // Reset sections processed counter for the processing phase
-    this.emit('sections-processed', 0);
-    
-    for (const section of sectionsToProcess) {
-      if (this.cancelled) {
-        console.log('Processing phase cancelled');
-        break;
-      }
-      
-      const { regionId, provinceId, type } = section;
-      const sectionKey = `${regionId}-${provinceId}-${type}`;
-      
-      try {
-        await this.fetchRegionProvince(regionId, provinceId, type, existingPropertiesMap);
-        sectionsProcessed++;
-        this.emit('sections-processed', sectionsProcessed);
-      } catch (error) {
-        console.error(`Error processing section ${sectionKey}:`, error);
-      }
-    }
-    
-    console.log('Processing phase completed');
+
+    // Free the first page references
+    sectionFirstPages.clear();
+
+    console.log('Retrieval completed');
     return { success: true };
-  }
-
-  private async fetchRegionProvince(
-    regionId: string, 
-    provinceId: string, 
-    type: string, 
-    existingPropertiesMap: Record<string, { id: number, price: number, price_text: string | null, last_updated: Date }>
-  ) {
-    if (this.cancelled) {
-      return;
-    }
-
-    const region = this.areas[regionId as keyof typeof this.areas];
-    if (!region) {
-      console.error(`Region ${regionId} not found`);
-      return;
-    }
-    
-    const provinceName = region.provinces[provinceId as keyof typeof region.provinces];
-    if (!provinceName) {
-      console.error(`Province ${provinceId} not found in region ${regionId}`);
-      return;
-    }
-    
-    const propertyType = this.types[type as keyof typeof this.types] || 'Unknown';
-    console.log(`Processing ${propertyType} in ${region.name}, ${provinceName}`);
-    
-    let processedItems = 0;
-    let pageNumber = 1;
-    
-    // Process all pages from the database for this region/province/type
-    while (true) {
-      if (this.cancelled) {
-        console.log('Processing cancelled');
-        break;
-      }
-      
-      // Choose the appropriate base URL based on property type
-      const baseUrl = type === '040' ? this.rentalBase : this.purchaseBase;
-      
-      // Get the page from the database
-      const url = baseUrl
-        .replace('{area}', regionId)
-        .replace('{type}', type)
-        .replace('{page}', pageNumber.toString())
-        .replace('{province}', provinceId);
-      
-      const pageRecord = await prisma.page.findFirst({
-        where: { url },
-        select: { content: true }
-      });
-      
-      if (!pageRecord) {
-        // No more pages in the database for this section
-        break;
-      }
-      
-      // Parse the page content
-      const parser = new DOMParser();
-      const document = parser.parseFromString(pageRecord.content, 'text/html');
-      
-      // Process the items on this page based on type
-      let propertyItems;
-      if (type === '040') {
-        // Rental properties
-        propertyItems = parseRentalUnitsForDB(document, regionId, provinceId);
-      } else {
-        // Purchase properties
-        propertyItems = parseItemsForDB(document, regionId, provinceId);
-      }
-      
-      if (propertyItems.length === 0) {
-        console.log(`No items found on page ${pageNumber}`);
-        break;
-      }
-      
-      // Process the items
-      await this.processPropertyItems(propertyItems, type, regionId, provinceId, existingPropertiesMap);
-      
-      processedItems += propertyItems.length;
-      this.emit('items-processed', processedItems, regionId, provinceId, type);
-      
-      // Move to the next page
-      pageNumber++;
-    }
-  }
-
-  private async processPropertyItems(
-    propertyItems: PropertyItemDB[] | RentalUnitDB[], 
-    type: string, 
-    regionId: string, 
-    provinceId: string,
-    existingPropertiesMap: Record<string, { id: number, price: number, price_text: string | null, last_updated: Date }>
-  ) {
-    // Handle differently based on property type
-    if (type === '040') {
-      // Process rental items
-      await this.processRentalItems(propertyItems as RentalUnitDB[], regionId, provinceId);
-    } else {
-      // Process purchase property items
-      await this.processPurchaseItems(propertyItems as PropertyItemDB[], regionId, provinceId, existingPropertiesMap);
-    }
   }
 
   private async processPurchaseItems(
@@ -739,45 +718,24 @@ class RetrieveCommand extends EventEmitter {
       .replace('{province}', provinceId);
   }
 
-  private async getPage(pageNr: number, areaId: string, provinceId: string, type: string): Promise<Document> {
-    let url = this.getPageUrl(pageNr, areaId, provinceId, type);
-    
-    // Check if page exists in database
-    const existing = await prisma.page.findFirst({
-      where: { url },
-      select: { content: true }
-    });
-    
-    if (existing) {
-      const parser = new DOMParser();
-      return parser.parseFromString(existing.content, 'text/html');
-    } else {
-      // Fetch the page
-      const options = {
-        headers: {
-          'Connection': 'keep-alive',
-          'Cache-Control': 'max-age=0',
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-          'Accept-Language': 'en-US,en;q=0.9',
-        }
-      };
-      
-      const response = await fetch(url, options);
-      const body = await response.text();
-      
-      // Store the page in the database
-      await prisma.page.create({
-        data: {
-          url,
-          content: body,
-          kind: 'property-list'
-        }
-      });
-      
-      const parser = new DOMParser();
-      return parser.parseFromString(body, 'text/html');
-    }
+  private async fetchPageFromSuumo(pageNr: number, areaId: string, provinceId: string, type: string): Promise<Document> {
+    const url = this.getPageUrl(pageNr, areaId, provinceId, type);
+
+    const options = {
+      headers: {
+        'Connection': 'keep-alive',
+        'Cache-Control': 'max-age=0',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+        'Accept-Language': 'en-US,en;q=0.9',
+      }
+    };
+
+    const response = await fetch(url, options);
+    const body = await response.text();
+
+    const parser = new DOMParser();
+    return parser.parseFromString(body, 'text/html');
   }
 
   private getTotalItems(document: Document): number {
