@@ -1,0 +1,14 @@
+# Single-package repo — this file exists to hold pnpm settings (pnpm v11 reads
+# global settings from here rather than package.json).
+#
+# allowBuilds: explicitly permit these dependencies to run their install/build
+# scripts. pnpm v11 ignores build scripts by default and fails a
+# --frozen-lockfile install if any are silently ignored, so the packages that
+# legitimately need a postinstall (Prisma engines, esbuild's platform binary,
+# biome's native binary) must be listed here.
+allowBuilds:
+  "@biomejs/biome": true
+  "@prisma/client": true
+  "@prisma/engines": true
+  esbuild: true
+  prisma: true
