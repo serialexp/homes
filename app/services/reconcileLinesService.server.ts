@@ -18,11 +18,11 @@
 import type { PrismaClient } from "@prisma/client";
 import prisma from "../utils/db.server.js";
 import { reconcileTrainLine } from "../utils/llm.server.js";
-import { getRedisValue, setRedisValue } from "./redis.server.js";
+import { clearRedisValue, getRedisValue, setRedisValue } from "./redis.server.js";
 
 export type ReconcileMode =
   | "reconcile"
-  | "reconcile-apply"
+  | "apply-stored"
   | "merge"
   | "merge-apply";
 
@@ -33,6 +33,16 @@ export interface ReconcileSummary {
   matched: number;
   changed: number;
   busCleared: number;
+  /** How many per-line proposals were stored for review/apply. */
+  proposalCount: number;
+}
+
+export interface ApplySummary {
+  phase: "apply";
+  total: number;
+  applied: number;
+  busCleared: number;
+  skipped: number;
 }
 
 export interface MergeSummary {
@@ -51,10 +61,59 @@ export interface ReconcileJobStatus {
   startTime: string;
   endTime?: string;
   error?: string;
-  summary?: ReconcileSummary | MergeSummary;
+  summary?: ReconcileSummary | ApplySummary | MergeSummary;
+}
+
+/**
+ * One proposed change for a single train_line row, produced by a dry run and
+ * persisted so an apply can write exactly what was previewed (instead of
+ * re-running the non-deterministic LLM).
+ */
+export interface LineProposal {
+  id: number;
+  name: string;
+  region: string | null;
+  oldKind: string;
+  newKind: string;
+  oldCanonicalId: string | null;
+  newCanonicalId: string | null;
+  newCanonicalName: string | null;
+  oldTranslatedName: string | null;
+  /** Clear the stale (often hallucinated) romaji on a bus row. */
+  clearBusName: boolean;
+  /** True if applying this proposal would change the row. */
+  changed: boolean;
 }
 
 const STATUS_KEY = "reconcile:lines:status";
+const PROPOSALS_KEY = "reconcile:lines:proposals";
+
+interface StoredProposals {
+  generatedAt: string;
+  proposals: LineProposal[];
+}
+
+export async function storeProposals(proposals: LineProposal[]): Promise<void> {
+  const payload: StoredProposals = {
+    generatedAt: new Date().toISOString(),
+    proposals,
+  };
+  await setRedisValue(PROPOSALS_KEY, JSON.stringify(payload), 86400);
+}
+
+export async function getStoredProposals(): Promise<LineProposal[] | null> {
+  const raw = await getRedisValue(PROPOSALS_KEY);
+  if (!raw) return null;
+  try {
+    return (JSON.parse(raw) as StoredProposals).proposals;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearStoredProposals(): Promise<void> {
+  await clearRedisValue(PROPOSALS_KEY);
+}
 
 export async function getReconcileJobStatus(): Promise<ReconcileJobStatus | null> {
   const raw = await getRedisValue(STATUS_KEY);
@@ -72,6 +131,7 @@ async function writeStatus(status: ReconcileJobStatus): Promise<void> {
 }
 
 export async function resetReconcileJobStatus(): Promise<void> {
+  await clearStoredProposals();
   await writeStatus({
     status: "idle",
     mode: "reconcile",
@@ -163,15 +223,51 @@ async function executeJob(
     return;
   }
 
-  const apply = mode === "reconcile-apply";
-  const summary = await reconcileAllLines(prisma, { apply, limit, onProgress });
+  if (mode === "apply-stored") {
+    const proposals = await getStoredProposals();
+    if (!proposals || proposals.length === 0) {
+      await writeStatus({
+        status: "failed",
+        mode,
+        message: "No previewed results to apply — run a dry run first.",
+        processed: 0,
+        total: 0,
+        startTime,
+        endTime: new Date().toISOString(),
+        error: "No stored proposals",
+      });
+      return;
+    }
+    const summary = await applyProposals(prisma, proposals, { onProgress });
+    // Clear so a stale set can't be applied twice.
+    await clearStoredProposals();
+    await writeStatus({
+      status: "completed",
+      mode,
+      message:
+        `Applied ${summary.applied} change(s), ${summary.busCleared} bus name(s) cleared` +
+        (summary.skipped ? `, ${summary.skipped} skipped (row gone)` : ""),
+      processed: summary.total,
+      total: summary.total,
+      startTime,
+      endTime: new Date().toISOString(),
+      summary,
+    });
+    return;
+  }
+
+  // Dry run: classify every row, persist the proposals for review/apply.
+  const { summary, proposals } = await reconcileAllLines(prisma, {
+    limit,
+    onProgress,
+  });
+  await storeProposals(proposals);
   await writeStatus({
     status: "completed",
     mode,
-    message: `${summary.matched}/${summary.total} matched to a canonical line` +
-      (apply
-        ? `, ${summary.changed} row(s) updated, ${summary.busCleared} bus name(s) cleared`
-        : " (dry-run, nothing written)"),
+    message:
+      `${summary.matched}/${summary.total} matched to a canonical line; ` +
+      `${summary.changed} row(s) would change (dry-run, nothing written)`,
     processed: summary.total,
     total: summary.total,
     startTime,
@@ -187,14 +283,17 @@ type ProgressFn = (
 ) => void | Promise<void>;
 
 /**
- * Reconcile every train_line row. Pure of Redis/UI concerns — progress is
+ * Reconcile every train_line row (dry-run): classify + match each row via the
+ * LLM and build a per-row proposal, WITHOUT writing anything. Progress is
  * surfaced via the callback so both the admin job and the CLI can reuse it.
+ * The caller persists `proposals` and later feeds them to applyProposals(), so
+ * the apply writes exactly what was previewed.
  */
 export async function reconcileAllLines(
   db: PrismaClient,
-  opts: { apply: boolean; limit?: number | null; onProgress?: ProgressFn }
-): Promise<ReconcileSummary> {
-  const { apply, limit = null, onProgress } = opts;
+  opts: { limit?: number | null; onProgress?: ProgressFn }
+): Promise<{ summary: ReconcileSummary; proposals: LineProposal[] }> {
+  const { limit = null, onProgress } = opts;
 
   const rows = await db.trainLine.findMany({
     orderBy: { id: "asc" },
@@ -202,6 +301,7 @@ export async function reconcileAllLines(
   });
 
   const countsByKind: Record<string, number> = {};
+  const proposals: LineProposal[] = [];
   let matched = 0;
   let changed = 0;
   let busCleared = 0;
@@ -217,20 +317,23 @@ export async function reconcileAllLines(
     const canonChanged = (row.canonical_id ?? null) !== r.canonical_id;
     // Clear stale hallucinated romaji on bus rows so the UI shows the raw label.
     const clearBusName = r.kind === "bus" && row.translated_name != null;
-    if (kindChanged || canonChanged || clearBusName) changed++;
+    const rowChanged = kindChanged || canonChanged || clearBusName;
+    if (rowChanged) changed++;
     if (clearBusName) busCleared++;
 
-    if (apply) {
-      await db.trainLine.update({
-        where: { id: row.id },
-        data: {
-          kind: r.kind,
-          canonical_id: r.canonical_id,
-          canonical_name: r.canonical_name,
-          ...(clearBusName ? { translated_name: null } : {}),
-        },
-      });
-    }
+    proposals.push({
+      id: row.id,
+      name: row.name,
+      region: row.region ?? null,
+      oldKind: row.kind,
+      newKind: r.kind,
+      oldCanonicalId: row.canonical_id ?? null,
+      newCanonicalId: r.canonical_id,
+      newCanonicalName: r.canonical_name,
+      oldTranslatedName: row.translated_name ?? null,
+      clearBusName,
+      changed: rowChanged,
+    });
 
     await onProgress?.(
       i,
@@ -240,12 +343,71 @@ export async function reconcileAllLines(
   }
 
   return {
-    phase: "reconcile",
-    total: rows.length,
-    countsByKind,
-    matched,
-    changed,
+    summary: {
+      phase: "reconcile",
+      total: rows.length,
+      countsByKind,
+      matched,
+      changed,
+      busCleared,
+      proposalCount: proposals.length,
+    },
+    proposals,
+  };
+}
+
+/**
+ * Apply a previously-computed set of proposals — no LLM calls, so the result is
+ * exactly what was previewed. A row that has since been deleted is skipped
+ * rather than failing the whole batch.
+ */
+export async function applyProposals(
+  db: PrismaClient,
+  proposals: LineProposal[],
+  opts: { onProgress?: ProgressFn } = {}
+): Promise<ApplySummary> {
+  const { onProgress } = opts;
+  let applied = 0;
+  let busCleared = 0;
+  let skipped = 0;
+  let i = 0;
+
+  for (const p of proposals) {
+    i++;
+    if (!p.changed) {
+      await onProgress?.(i, proposals.length, `Skipping unchanged ${p.name}`);
+      continue;
+    }
+    try {
+      await db.trainLine.update({
+        where: { id: p.id },
+        data: {
+          kind: p.newKind,
+          canonical_id: p.newCanonicalId,
+          canonical_name: p.newCanonicalName,
+          ...(p.clearBusName ? { translated_name: null } : {}),
+        },
+      });
+      applied++;
+      if (p.clearBusName) busCleared++;
+    } catch (error) {
+      // Most likely the row was deleted (e.g. by a merge) since the dry run.
+      console.warn(`Skipping proposal for train_line #${p.id} (${p.name}):`, error);
+      skipped++;
+    }
+    await onProgress?.(
+      i,
+      proposals.length,
+      `Applying ${i}/${proposals.length}: ${p.name} → ${p.newKind}`
+    );
+  }
+
+  return {
+    phase: "apply",
+    total: proposals.length,
+    applied,
     busCleared,
+    skipped,
   };
 }
 

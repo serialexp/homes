@@ -24,6 +24,7 @@
 import prisma from "../prisma.js";
 import {
   reconcileAllLines,
+  applyProposals,
   mergeCanonicalDuplicates,
 } from "../../app/services/reconcileLinesService.server.js";
 
@@ -66,19 +67,36 @@ async function main() {
     console.log(
       `\n=== RECONCILE phase ${args.apply ? "(APPLY)" : "(dry-run)"} ===\n`
     );
-    const summary = await reconcileAllLines(prisma, {
-      apply: args.apply,
+    const { summary, proposals } = await reconcileAllLines(prisma, {
       limit: args.limit,
       onProgress: (p, total, message) => {
         console.log(`  ${p}/${total} ${message}`);
       },
     });
+
+    // Show the proposed per-line changes.
+    for (const p of proposals.filter((x) => x.changed)) {
+      const canon = p.newCanonicalName ? ` [${p.newCanonicalName}]` : "";
+      const cleared = p.clearBusName ? " (clear stale name)" : "";
+      console.log(
+        `  #${p.id} "${p.name}": ${p.oldKind} → ${p.newKind}${canon}${cleared}`
+      );
+    }
+
     console.log("\n--- summary ---");
     console.log("by kind:", summary.countsByKind);
     console.log(`canonical matches: ${summary.matched}/${summary.total}`);
+    console.log(`rows that would change: ${summary.changed}`);
+
     if (args.apply) {
+      console.log("\n=== applying previewed proposals ===");
+      const applied = await applyProposals(prisma, proposals, {
+        onProgress: (p, total, message) => {
+          console.log(`  ${p}/${total} ${message}`);
+        },
+      });
       console.log(
-        `rows updated: ${summary.changed}, bus names cleared: ${summary.busCleared}`
+        `rows updated: ${applied.applied}, bus names cleared: ${applied.busCleared}, skipped: ${applied.skipped}`
       );
     } else {
       console.log("\n(dry-run — re-run with --apply to write)");

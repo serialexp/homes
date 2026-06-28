@@ -3,12 +3,20 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/node";
-import { useActionData, useLoaderData, useSubmit } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import {
+  useActionData,
+  useLoaderData,
+  useRevalidator,
+  useSubmit,
+} from "@remix-run/react";
+import { useEffect } from "react";
 import {
   getReconcileJobStatus,
+  getStoredProposals,
   resetReconcileJobStatus,
   startReconcileJob,
+  type ApplySummary,
+  type LineProposal,
   type ReconcileJobStatus,
   type ReconcileMode,
   type ReconcileSummary,
@@ -17,12 +25,18 @@ import {
 
 export async function loader({ request: _request }: LoaderFunctionArgs) {
   const status = await getReconcileJobStatus();
-  return json({ status });
+  // Only ship the (potentially large) proposal list once a dry run has
+  // completed — not on every running-state poll.
+  const proposals =
+    status?.status === "completed" && status.mode === "reconcile"
+      ? await getStoredProposals()
+      : null;
+  return json({ status, proposals });
 }
 
 const VALID_MODES: ReconcileMode[] = [
   "reconcile",
-  "reconcile-apply",
+  "apply-stored",
   "merge",
   "merge-apply",
 ];
@@ -65,42 +79,42 @@ function isReconcileSummary(
 ): s is ReconcileSummary {
   return !!s && s.phase === "reconcile";
 }
+function isApplySummary(s: ReconcileJobStatus["summary"]): s is ApplySummary {
+  return !!s && s.phase === "apply";
+}
 function isMergeSummary(s: ReconcileJobStatus["summary"]): s is MergeSummary {
   return !!s && s.phase === "merge";
 }
 
+function kindBadge(kind: string) {
+  return (
+    <span className="badge badge-ghost badge-sm whitespace-nowrap">{kind}</span>
+  );
+}
+
 export default function ReconcilePage() {
-  const { status } = useLoaderData<typeof loader>();
+  const { status, proposals } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const submit = useSubmit();
+  const revalidator = useRevalidator();
 
-  const [current, setCurrent] = useState<ReconcileJobStatus | null>(status);
-  const [limit, setLimit] = useState("");
+  const running = status?.status === "running";
 
-  const running = current?.status === "running";
-
-  // Poll while a job is running.
+  // Poll while a job is running by revalidating the loader (re-reads Redis
+  // status, and pulls in proposals once the dry run completes).
   useEffect(() => {
     if (!running) return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch("/admin/reconcile/status", {
-          headers: { Accept: "application/json" },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        setCurrent(data.status);
-      } catch (error) {
-        console.error("Error fetching reconcile status:", error);
-      }
+    const interval = setInterval(() => {
+      if (revalidator.state === "idle") revalidator.revalidate();
     }, 2000);
     return () => clearInterval(interval);
-  }, [running]);
+  }, [running, revalidator]);
 
   const run = (mode: ReconcileMode) => {
     const fd = new FormData();
     fd.append("_action", mode);
-    if (limit.trim()) fd.append("limit", limit.trim());
+    const limitEl = document.getElementById("limit") as HTMLInputElement | null;
+    if (limitEl?.value.trim()) fd.append("limit", limitEl.value.trim());
     submit(fd, { method: "post" });
   };
   const reset = () => {
@@ -110,20 +124,24 @@ export default function ReconcilePage() {
   };
 
   const pct =
-    current && current.total > 0
-      ? Math.round((current.processed / current.total) * 100)
+    status && status.total > 0
+      ? Math.round((status.processed / status.total) * 100)
       : 0;
+
+  const changedCount = proposals?.filter((p) => p.changed).length ?? 0;
+  const hasApplyable = changedCount > 0;
 
   return (
     <div className="container mx-auto p-4">
       <h2 className="text-2xl font-bold mb-2">Train Line Reconciliation</h2>
       <p className="text-base-content/60 mb-6 max-w-3xl">
-        Classify each <code>train_line</code> row (rail / subway / tram /
-        monorail / shinkansen / bus) and match railway lines to a canonical line
-        from the bundled dataset. Dry-runs write nothing. Applying also clears
-        stale hallucinated romaji on bus rows so the original Japanese label
-        shows. Each run makes one LLM call per line, so it can take a few
-        minutes.
+        A <strong>Dry run</strong> classifies each <code>train_line</code> row
+        (rail / subway / tram / monorail / shinkansen / bus), matches railway
+        lines to the bundled canonical dataset, and stores the proposed changes
+        for review — it writes nothing. Review the table, then{" "}
+        <strong>Apply</strong> writes exactly those proposals (no second LLM
+        call, so what you see is what you get). Each dry run makes one LLM call
+        per line, so it can take a few minutes.
       </p>
 
       {actionData && (
@@ -139,34 +157,34 @@ export default function ReconcilePage() {
       )}
 
       {/* Status */}
-      {current && current.status !== "idle" && (
+      {status && status.status !== "idle" && (
         <div className="mb-8 bg-base-100 p-6 rounded-lg shadow">
           <div className="flex justify-between mb-1">
             <span className="font-medium">
               Status:{" "}
               <span
                 className={`font-bold ${
-                  current.status === "running"
+                  status.status === "running"
                     ? "text-blue-600"
-                    : current.status === "completed"
+                    : status.status === "completed"
                       ? "text-green-600"
-                      : current.status === "failed"
+                      : status.status === "failed"
                         ? "text-red-600"
                         : ""
                 }`}
               >
-                {current.status.toUpperCase()}
+                {status.status.toUpperCase()}
               </span>{" "}
-              <span className="text-base-content/50">({current.mode})</span>
+              <span className="text-base-content/50">({status.mode})</span>
             </span>
-            {current.total > 0 && <span>{pct}%</span>}
+            {status.total > 0 && <span>{pct}%</span>}
           </div>
 
-          {current.total > 0 && (
+          {status.total > 0 && (
             <div className="w-full bg-base-300 rounded-full h-2.5 mb-3">
               <div
                 className={`h-2.5 rounded-full ${
-                  current.status === "failed" ? "bg-red-600" : "bg-blue-600"
+                  status.status === "failed" ? "bg-red-600" : "bg-blue-600"
                 }`}
                 style={{ width: `${pct}%` }}
               />
@@ -174,58 +192,74 @@ export default function ReconcilePage() {
           )}
 
           <p className="text-sm">
-            <span className="font-medium">Message:</span> {current.message}
+            <span className="font-medium">Message:</span> {status.message}
           </p>
           <p className="text-sm">
-            <span className="font-medium">Progress:</span> {current.processed} /{" "}
-            {current.total}
+            <span className="font-medium">Progress:</span> {status.processed} /{" "}
+            {status.total}
           </p>
-          {current.error && (
+          {status.error && (
             <p className="text-sm text-red-600">
-              <span className="font-medium">Error:</span> {current.error}
+              <span className="font-medium">Error:</span> {status.error}
             </p>
           )}
 
           {/* Summary */}
-          {isReconcileSummary(current.summary) && (
+          {isReconcileSummary(status.summary) && (
             <div className="mt-4 text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
               <p>
                 <span className="font-medium">Canonical matches:</span>{" "}
-                {current.summary.matched} / {current.summary.total}
+                {status.summary.matched} / {status.summary.total}
               </p>
               <p>
-                <span className="font-medium">Rows changed:</span>{" "}
-                {current.summary.changed}
+                <span className="font-medium">Rows that would change:</span>{" "}
+                {status.summary.changed}
               </p>
               <p>
-                <span className="font-medium">Bus names cleared:</span>{" "}
-                {current.summary.busCleared}
+                <span className="font-medium">Bus names to clear:</span>{" "}
+                {status.summary.busCleared}
               </p>
               <p className="md:col-span-2">
                 <span className="font-medium">By kind:</span>{" "}
-                {Object.entries(current.summary.countsByKind)
+                {Object.entries(status.summary.countsByKind)
                   .map(([k, v]) => `${k}: ${v}`)
                   .join(", ")}
               </p>
             </div>
           )}
-          {isMergeSummary(current.summary) && (
+          {isApplySummary(status.summary) && (
+            <div className="mt-4 text-sm grid grid-cols-1 md:grid-cols-3 gap-2">
+              <p>
+                <span className="font-medium">Applied:</span>{" "}
+                {status.summary.applied}
+              </p>
+              <p>
+                <span className="font-medium">Bus names cleared:</span>{" "}
+                {status.summary.busCleared}
+              </p>
+              <p>
+                <span className="font-medium">Skipped:</span>{" "}
+                {status.summary.skipped}
+              </p>
+            </div>
+          )}
+          {isMergeSummary(status.summary) && (
             <div className="mt-4 text-sm">
               <p>
                 <span className="font-medium">Duplicate groups:</span>{" "}
-                {current.summary.groups} —{" "}
+                {status.summary.groups} —{" "}
                 <span className="font-medium">rows to delete:</span>{" "}
-                {current.summary.rowsDeleted}
+                {status.summary.rowsDeleted}
               </p>
-              {current.summary.plan.length > 0 && (
+              {status.summary.plan.length > 0 && (
                 <pre className="mt-2 max-h-64 overflow-auto bg-base-200 p-3 rounded text-xs whitespace-pre-wrap">
-                  {current.summary.plan.join("\n")}
+                  {status.summary.plan.join("\n")}
                 </pre>
               )}
             </div>
           )}
 
-          {current.status !== "running" && (
+          {status.status !== "running" && (
             <button
               type="button"
               onClick={reset}
@@ -234,6 +268,81 @@ export default function ReconcilePage() {
               Clear status
             </button>
           )}
+        </div>
+      )}
+
+      {/* Proposal preview + apply (after a completed dry run) */}
+      {proposals && proposals.length > 0 && (
+        <div className="mb-8 bg-base-100 p-6 rounded-lg shadow">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <h3 className="font-semibold">
+              Preview — {changedCount} of {proposals.length} rows would change
+            </h3>
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  confirm(
+                    `Apply ${changedCount} previewed change(s) to the train_line table? This writes exactly what is shown below.`
+                  )
+                ) {
+                  run("apply-stored");
+                }
+              }}
+              disabled={running || !hasApplyable}
+              className="px-4 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 disabled:bg-gray-400"
+            >
+              Apply these {changedCount} results
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-base-200 text-left">
+                  <th className="py-2 px-3">Line (raw)</th>
+                  <th className="py-2 px-3">Region</th>
+                  <th className="py-2 px-3">Kind</th>
+                  <th className="py-2 px-3">Canonical match</th>
+                  <th className="py-2 px-3">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-base-300">
+                {[...proposals]
+                  .sort(
+                    (a, b) => Number(b.changed) - Number(a.changed) || a.id - b.id
+                  )
+                  .map((p: LineProposal) => (
+                    <tr
+                      key={p.id}
+                      className={p.changed ? "bg-yellow-50" : "opacity-60"}
+                    >
+                      <td className="py-1 px-3 whitespace-nowrap">{p.name}</td>
+                      <td className="py-1 px-3">{p.region ?? "-"}</td>
+                      <td className="py-1 px-3">
+                        {p.oldKind === p.newKind ? (
+                          kindBadge(p.newKind)
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            {kindBadge(p.oldKind)}
+                            <span className="text-base-content/50">→</span>
+                            {kindBadge(p.newKind)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1 px-3">
+                        {p.newCanonicalName ?? (
+                          <span className="text-base-content/40">—</span>
+                        )}
+                      </td>
+                      <td className="py-1 px-3 text-base-content/70">
+                        {p.clearBusName ? "clear stale name" : ""}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -250,8 +359,6 @@ export default function ReconcilePage() {
             id="limit"
             type="number"
             min="1"
-            value={limit}
-            onChange={(e) => setLimit(e.target.value)}
             placeholder="all rows"
             disabled={running}
             className="w-40 p-2 border border-base-300 rounded-md"
@@ -260,24 +367,17 @@ export default function ReconcilePage() {
 
         <div>
           <h3 className="font-semibold mb-2">Reconcile</h3>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => run("reconcile")}
-              disabled={running}
-              className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400"
-            >
-              Dry run
-            </button>
-            <button
-              type="button"
-              onClick={() => run("reconcile-apply")}
-              disabled={running}
-              className="px-4 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 disabled:bg-gray-400"
-            >
-              Apply
-            </button>
-          </div>
+          <p className="text-sm text-base-content/60 mb-2">
+            Run a dry run to preview, then apply from the preview table above.
+          </p>
+          <button
+            type="button"
+            onClick={() => run("reconcile")}
+            disabled={running}
+            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+          >
+            Dry run
+          </button>
         </div>
 
         <div>
