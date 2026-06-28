@@ -53,11 +53,26 @@ export default function AdminIndex() {
           <p className="text-base-content/60 mb-4">
             Manage buildings and rental units in the database.
           </p>
-          <Link 
-            to="/admin/rentals" 
+          <Link
+            to="/admin/rentals"
             className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 block text-center"
           >
             Manage Rentals
+          </Link>
+        </div>
+
+        {/* Train Line Reconciliation Card */}
+        <div className="bg-base-100 p-6 rounded-lg shadow-md">
+          <h2 className="text-xl font-semibold mb-4">Train Line Reconciliation</h2>
+          <p className="text-base-content/60 mb-4">
+            Classify transit lines, match railways to canonical lines, and clean
+            up bus routes.
+          </p>
+          <Link
+            to="/admin/reconcile"
+            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 block text-center"
+          >
+            Open Reconciliation
           </Link>
         </div>
       </div>

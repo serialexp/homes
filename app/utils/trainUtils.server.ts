@@ -1,23 +1,45 @@
-import { translateTrainNames } from '../utils/llm.server.js';
+import {
+    translateTrainNames,
+    reconcileTrainLine,
+    type ReconcileResult,
+} from '../utils/llm.server.js';
 import { areas } from '../data/propertyData.js';
 import prisma from './db.server.js';
 
+/** Canonical-reconciliation metadata for a train line (see canonicalLines.server.ts). */
+export type LineMeta = Pick<ReconcileResult, 'kind' | 'canonical_id' | 'canonical_name'>;
+
 /**
- * Get or create a train line, including translation
+ * Get or create a train line, including translation.
+ *
+ * `meta` carries the canonical-reconciliation result (kind + canonical line
+ * match) and is stored on create. We intentionally create one row per distinct
+ * raw name and group by `canonical_id` at the display layer, rather than
+ * merging variants here — so a given raw label is only reconciled once (on
+ * first sight) and then found by exact name forever after. Physical merging of
+ * duplicate canonical rows is an opt-in step in reconcileTrainLines.ts.
  */
-export async function getOrCreateTrainLine(lineName: string, translatedName: string | null, region?: string) {
+export async function getOrCreateTrainLine(
+    lineName: string,
+    translatedName: string | null,
+    region?: string,
+    meta?: LineMeta
+) {
     // Try to find existing line
     let line = await prisma.trainLine.findUnique({
         where: { name: lineName }
     });
 
     if (!line) {
-        // Create new line with pre-translated name
+        // Create new line with pre-translated name + canonical metadata
         line = await prisma.trainLine.create({
             data: {
                 name: lineName,
                 translated_name: translatedName,
-                region: region
+                region: region,
+                kind: meta?.kind ?? 'unknown',
+                canonical_id: meta?.canonical_id ?? null,
+                canonical_name: meta?.canonical_name ?? null,
             }
         });
     }
@@ -90,6 +112,8 @@ export async function processStationInfo(
 ) {
     // Collect names that need translation (not yet in DB)
     const namesToTranslate: Array<{ japanese: string; type: "line" | "station" }> = [];
+    // Line names that are new (not yet in DB) — these get reconciled once.
+    const newLineNames = new Set<string>();
 
     for (const stationInfo of stations) {
         const existingLine = await prisma.trainLine.findUnique({
@@ -97,6 +121,7 @@ export async function processStationInfo(
         });
         if (!existingLine) {
             namesToTranslate.push({ japanese: stationInfo.line, type: "line" });
+            newLineNames.add(stationInfo.line);
         }
 
         if (existingLine) {
@@ -112,16 +137,28 @@ export async function processStationInfo(
         }
     }
 
-    // Deduplicate
+    // Reconcile each new line against the canonical dataset (classify + match).
+    // Done before translation so we can skip romanizing lines that get a
+    // canonical name (which the UI prefers anyway).
+    const reconciled = new Map<string, LineMeta>();
+    for (const name of newLineNames) {
+        reconciled.set(name, await reconcileTrainLine(name, region));
+    }
+
+    // Deduplicate; drop new lines that already have a canonical name (no need to
+    // also spend tokens romanizing them).
     const seen = new Set<string>();
     const uniqueNames = namesToTranslate.filter(item => {
         const key = `${item.type}:${item.japanese}`;
         if (seen.has(key)) return false;
         seen.add(key);
+        if (item.type === "line" && reconciled.get(item.japanese)?.canonical_name) {
+            return false;
+        }
         return true;
     });
 
-    // Batch translate all new names in one LLM call
+    // Batch translate all remaining new names in one LLM call
     const regionName = region ? areas[region as keyof typeof areas]?.name : undefined;
     let translations = new Map<string, string>();
     if (uniqueNames.length > 0) {
@@ -133,7 +170,8 @@ export async function processStationInfo(
         const line = await getOrCreateTrainLine(
             stationInfo.line,
             translations.get(stationInfo.line) ?? null,
-            region
+            region,
+            reconciled.get(stationInfo.line)
         );
 
         const station = await getOrCreateStation(

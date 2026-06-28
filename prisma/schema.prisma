@@ -208,12 +208,19 @@ model TrainLine {
     translated_name String?  @db.VarChar(255)
     operator        String?  @db.VarChar(100)
     region          String?  @db.VarChar(100)
+    // Reconciliation against the canonical rail dataset (see canonicalLines.server.ts).
+    // kind: rail | subway | tram | monorail | shinkansen | bus | unknown
+    kind            String   @default("unknown") @db.VarChar(20)
+    // canonical_id holds the ekidata_id of the matched canonical line (null for bus/unknown).
+    canonical_id    String?  @db.VarChar(32)
+    canonical_name  String?  @db.VarChar(255)
     insert_date     DateTime @default(now())
     last_updated    DateTime @default(now())
 
     // Relationships
     stations Station[]
 
+    @@index([canonical_id])
     @@map("train_line")
 }
 

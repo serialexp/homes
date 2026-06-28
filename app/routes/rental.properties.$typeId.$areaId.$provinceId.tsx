@@ -10,6 +10,11 @@ import { useState } from "react";
 const RENTAL_TYPE_ID = '040';
 const RENTAL_TYPE_NAME = 'Rental';
 
+/** Display label for a train line: canonical match wins, then AI romaji, then raw. */
+function lineLabel(line: Pick<TrainLine, "canonical_name" | "translated_name" | "name">): string {
+  return line.canonical_name || line.translated_name || line.name;
+}
+
 const ITEMS_PER_PAGE = 10;
 
 // Price ranges in JPY
@@ -353,11 +358,35 @@ export default function RentalPropertiesPage() {
             onChange={(e) => handleTrainLineChange(e.target.value || null)}
           >
             <option value="">All Lines</option>
-            {trainLines.map((line) => (
-              <option key={line.id} value={line.id}>
-                {line.translated_name || line.name}
-              </option>
-            ))}
+            {(() => {
+              const sorted = [...trainLines].sort((a, b) =>
+                lineLabel(a).localeCompare(lineLabel(b))
+              );
+              const rail = sorted.filter((l) => l.kind !== "bus");
+              const bus = sorted.filter((l) => l.kind === "bus");
+              return (
+                <>
+                  {rail.length > 0 && (
+                    <optgroup label="Rail lines">
+                      {rail.map((line) => (
+                        <option key={line.id} value={line.id}>
+                          {lineLabel(line)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {bus.length > 0 && (
+                    <optgroup label="Bus routes">
+                      {bus.map((line) => (
+                        <option key={line.id} value={line.id}>
+                          {lineLabel(line)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </>
+              );
+            })()}
           </select>
         </div>
 
@@ -444,7 +473,12 @@ export default function RentalPropertiesPage() {
                                       : ""
                                   }`}
                                 >
-                                  {station.station.train_line.translated_name || station.station.train_line.name} - {station.station.translated_name || station.station.name} ({station.walking_minutes} min walk)
+                                  {lineLabel(station.station.train_line)}
+                                  {station.station.train_line.kind === "bus" && (
+                                    <span className="badge badge-ghost badge-sm ml-1 align-middle">Bus</span>
+                                  )}
+                                  {" - "}
+                                  {station.station.translated_name || station.station.name} ({station.walking_minutes} min walk)
                                 </li>
                               ))}
                             </ul>
