@@ -18,6 +18,10 @@ class RetrieveCommand extends EventEmitter {
   private static SECTION_TIMEOUT_MS = 30 * 60 * 1000;
   // Number of consecutive all-known pages before stopping a section
   private static EARLY_STOP_THRESHOLD = 2;
+  // Backstop on pages derived from the item total, in case the item count is
+  // misparsed (e.g. a site-wide total instead of the search count). Real Tokyo
+  // searches run ~2000+ pages, so keep this comfortably above that.
+  private static MAX_PAGES_PER_SECTION = 5000;
 
   // Add event declarations for TypeScript
   on(event: 'total-items', listener: (total: number) => void): this;
@@ -228,9 +232,12 @@ class RetrieveCommand extends EventEmitter {
     let sectionsCalculated = 0;
     let totalItems = 0;
 
-    // Map to store first page documents and page counts for each section
+    // Page count per section, computed in the calculation phase. We deliberately
+    // do NOT retain the parsed page-1 DOM here: at ~8 MB per section across up to
+    // ~280 sections that was multiple GB of resident memory held for the whole
+    // run. The retrieval phase re-fetches page 1, which is cheap relative to the
+    // full multi-hundred-page sweep each section already does.
     const sectionPageCounts: Map<string, number> = new Map();
-    const sectionFirstPages: Map<string, Document> = new Map();
 
     for (const section of sectionsToProcess) {
       if (this.cancelled) {
@@ -252,14 +259,27 @@ class RetrieveCommand extends EventEmitter {
         const sectionTotalItems = this.getTotalItems(firstPage);
         totalItems += sectionTotalItems;
 
-        const sectionTotalPages = this.getTotalPages(firstPage);
+        // Suumo serves a truncated pagination block to some clients (e.g. only
+        // "1 2 3" page links from datacenter IPs), so the last-page number we
+        // can scrape badly under-reports the real page count. The result total
+        // is reliable, so derive the page count from it and keep the scraped
+        // value only as a floor. Cap as a backstop against a bad item parse.
+        const parsedPages = this.getTotalPages(firstPage);
+        const pageSize = this.getPageSize(type);
+        const computedPages = sectionTotalItems > 0 ? Math.ceil(sectionTotalItems / pageSize) : 0;
+        const sectionTotalPages = Math.min(
+          RetrieveCommand.MAX_PAGES_PER_SECTION,
+          Math.max(parsedPages, computedPages, 1)
+        );
         sectionPageCounts.set(sectionKey, sectionTotalPages);
-        sectionFirstPages.set(sectionKey, firstPage);
 
         sectionsCalculated++;
         this.emit('sections-processed', sectionsCalculated);
 
-        console.log(`Section ${sectionKey}: ${sectionTotalItems} items, ${sectionTotalPages} pages`);
+        console.log(
+          `Section ${sectionKey}: ${sectionTotalItems} items, ${sectionTotalPages} pages ` +
+          `(scraped pagination: ${parsedPages}, computed from items/${pageSize}: ${computedPages})`
+        );
       } catch (error) {
         console.error(`Error calculating section ${sectionKey}:`, error);
       }
@@ -284,9 +304,8 @@ class RetrieveCommand extends EventEmitter {
       const { regionId, provinceId, type } = section;
       const sectionKey = `${regionId}-${provinceId}-${type}`;
       const sectionTotalPages = sectionPageCounts.get(sectionKey) || 0;
-      const firstPage = sectionFirstPages.get(sectionKey);
 
-      if (!firstPage || sectionTotalPages === 0) {
+      if (sectionTotalPages === 0) {
         sectionsProcessed++;
         this.emit('sections-processed', sectionsProcessed);
         continue;
@@ -324,13 +343,11 @@ class RetrieveCommand extends EventEmitter {
           // Emit event before fetching page to allow for cancellation
           this.emit('before-page-fetch', page, sectionTotalPages);
 
-          // Get the page document (page 1 was already fetched in calculation phase)
-          let document: Document;
-          if (page === 1) {
-            document = firstPage;
-          } else {
-            document = await this.fetchPageFromSuumo(page, regionId, provinceId, type);
-          }
+          // Fetch the page. Page 1 was also fetched in the calculation phase, but
+          // we re-fetch it rather than hold its multi-MB DOM in memory across the
+          // whole run (see sectionPageCounts note above). Suumo sorts by recency
+          // and changes every request anyway, so a fresh fetch is also correct.
+          const document = await this.fetchPageFromSuumo(page, regionId, provinceId, type);
 
           // Parse and process items immediately
           let pageNewItems = 0;
@@ -431,9 +448,6 @@ class RetrieveCommand extends EventEmitter {
       sectionsProcessed++;
       this.emit('sections-processed', sectionsProcessed);
     }
-
-    // Free the first page references
-    sectionFirstPages.clear();
 
     console.log('Retrieval completed');
     return { success: true };
@@ -707,6 +721,17 @@ class RetrieveCommand extends EventEmitter {
     console.log(`Processed ${Object.keys(buildingMap).length} buildings with ${rentalItems.length} rental units`);
   }
 
+  /**
+   * Listings per page, read from the `pc` parameter of the relevant base URL so
+   * it stays in sync if the URL changes. Used to derive the page count from the
+   * result total (Suumo's scraped pagination is unreliable — see calc phase).
+   */
+  private getPageSize(type: string): number {
+    const baseUrl = type === '040' ? this.rentalBase : this.purchaseBase;
+    const match = baseUrl.match(/[?&]pc=(\d+)/);
+    return match ? parseInt(match[1], 10) : 50;
+  }
+
   private getPageUrl(pageNr: number, areaId: string, provinceId: string, type: string): string {
     // Choose the appropriate base URL based on property type
     const baseUrl = type === '040' ? this.rentalBase : this.purchaseBase;
@@ -743,7 +768,13 @@ class RetrieveCommand extends EventEmitter {
       const element = simpleXPathSelect1(document as unknown as Element, '//div[@class="pagination_set-hit"]') as Element;
       
       if (element && element.textContent) {
-        return parseInt(element.textContent.trim().replace(',', ''));
+        // Strip ALL thousands separators (not just the first) before parsing,
+        // and stop at the first non-digit so trailing "件"/tooltip text is
+        // ignored.
+        const digits = element.textContent.trim().replace(/,/g, '').match(/^\d+/);
+        if (digits) {
+          return parseInt(digits[0], 10);
+        }
       }
     } catch (error) {
       console.error('Error parsing total items:', error);
