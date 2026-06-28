@@ -31,10 +31,17 @@ COPY --from=build /app/server.ts ./
 COPY --from=build /app/app ./app
 COPY --from=build /app/src ./src
 COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/data ./data
 
 # Install only production dependencies and regenerate Prisma client for this OS
 ENV CI=true
 RUN npm install -g pnpm && pnpm install --prod && npx prisma generate
+
+# Bake in version info (passed from CI; see .github/workflows/docker.yml)
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
+ENV GIT_SHA=$GIT_SHA
+ENV BUILD_TIME=$BUILD_TIME
 
 # Set environment variables
 ENV NODE_ENV=production

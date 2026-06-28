@@ -12,11 +12,15 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
   } from "@remix-run/react";
   import { SignIn, SignOut } from "@phosphor-icons/react";
   import { getSession } from "./utils/auth.server.js";
+  import { VERSION } from "./utils/version.server.js";
   import "./style.css"
 
   export async function loader({ request }: LoaderFunctionArgs) {
     const session = await getSession(request);
-    return json({ isAdmin: session.get("authenticated") === true });
+    return json({
+      isAdmin: session.get("authenticated") === true,
+      version: VERSION,
+    });
   }
 
   export function ErrorBoundary() {
@@ -71,7 +75,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
   }
 
   export default function App() {
-    const { isAdmin } = useLoaderData<typeof loader>();
+    const { isAdmin, version } = useLoaderData<typeof loader>();
     const navigation = useNavigation();
     const isLoading = navigation.state === "loading";
     return (
@@ -138,7 +142,25 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
           <main>
             <Outlet />
           </main>
-  
+
+          <footer className="mt-16 border-t border-base-300 px-4 py-3 text-center text-xs text-base-content/40">
+            {version.commitUrl ? (
+              <a
+                href={version.commitUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-base-content/60"
+                title={version.buildTime ? `Built ${version.buildTime}` : undefined}
+              >
+                version {version.sha}
+              </a>
+            ) : (
+              <span title={version.buildTime ? `Built ${version.buildTime}` : undefined}>
+                version {version.sha}
+              </span>
+            )}
+          </footer>
+
           <Scripts />
         </body>
       </html>
