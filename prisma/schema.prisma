@@ -111,6 +111,10 @@ model Building {
     buildingStations BuildingStation[]
 
     @@index([suumo_id])
+    // Drives the rental list query: equality on (region, province) plus the
+    // last_updated DESC sort, so the paginated lookup is an index range scan
+    // instead of a full scan + filesort.
+    @@index([region, province, last_updated])
     @@map("building")
 }
 
@@ -152,7 +156,10 @@ model RentalUnit {
     rentalPriceHistory RentalPriceHistory[]
 
     @@index([suumo_id])
-    @@index([building_id])
+    // (building_id, rent) serves both the per-building rent-ordered include and
+    // the price `some` filter; the leftmost prefix also covers plain building_id
+    // lookups, so a separate building_id index is redundant.
+    @@index([building_id, rent])
     @@map("rental_unit")
 }
 
