@@ -12,9 +12,14 @@ jobs:
 
       - name: Extract version from commit message
         id: version
+        env:
+          # Pass via env, NOT inline ${{ }} interpolation: the commit message is
+          # untrusted text and splicing it into the script lets backticks/quotes
+          # run as shell (a `docker build` backtick in a message once executed
+          # docker with no args and failed the job).
+          MSG: ${{ github.event.head_commit.message }}
         run: |
-          MSG="${{ github.event.head_commit.message }}"
-          VERSION=$(echo "$MSG" | grep -oP 'release:\s*\K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+          VERSION=$(printf '%s' "$MSG" | grep -oP 'release:\s*\K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
