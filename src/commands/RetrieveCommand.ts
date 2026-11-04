@@ -407,7 +407,7 @@ class RetrieveCommand extends EventEmitter {
         }
 
         const elapsed = Math.round((Date.now() - sectionStartTime) / 1000);
-        const stopReason = earlyStop ? 'caught up' : timedOut ? 'timed out' : 'completed all pages';
+        const stopReason = earlyStop ? 'caught up' : timedOut ? 'timed out' : this.cancelled ? 'cancelled' : 'completed all pages';
         console.log(`Section ${sectionKey}: ${stopReason} in ${elapsed}s — ${sectionNewItems} new, ${sectionUpdatedItems} updated, ${sectionProcessedItems} total items`);
 
       } catch (error) {
