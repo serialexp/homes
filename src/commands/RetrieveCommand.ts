@@ -544,14 +544,12 @@ class RetrieveCommand extends EventEmitter {
       if (item.building_suumo_id === 'building-') {
         continue;
       }
-      // Use the building address+title as the unique identifier
-      
       if (!buildingMap[item.building_suumo_id]) {
         console.log(`Processing building ${item.building_suumo_id}`);
-        // Create a new building entry
+        // Create a new building entry, keyed by the building id from the listing page
         buildingMap[item.building_suumo_id] = {
           building: {
-            suumo_id: item.suumo_id,
+            suumo_id: item.building_suumo_id,
             url: item.url.split('?')[0], // Base URL without parameters
             building_type: item.building_type,
             title: item.building_title || '',
@@ -575,17 +573,37 @@ class RetrieveCommand extends EventEmitter {
       
       // Add the unit to the building
       buildingMap[item.building_suumo_id].units.push(item);
-    }
-    
-    // Look up only the buildings on this page, by the suumo_id each is stored under
+    }    // Look up only the buildings on this page, by the building key they are stored under
     const existingBuildingsMap = new Map(
       (await prisma.building.findMany({
-        where: { suumo_id: { in: Object.values(buildingMap).map(({ building }) => building.suumo_id) } },
+        where: { suumo_id: { in: Object.keys(buildingMap) } },
         select: { id: true, suumo_id: true }
       })).map(building => [building.suumo_id, building])
     );
 
-    // Process buildings and their units
+    // Buildings saved before keys were fixed carry one of their units' suumo_id instead.
+    // Find those through a unit they already contain, and re-key them to the building key.
+    const keyByUnitId = new Map(rentalItems.map(item => [item.suumo_id, item.building_suumo_id]));
+    const unmatchedUnitIds = rentalItems
+      .filter(item => !existingBuildingsMap.has(item.building_suumo_id))
+      .map(item => item.suumo_id);
+    if (unmatchedUnitIds.length > 0) {
+      const knownUnits = await prisma.rentalUnit.findMany({
+        where: { suumo_id: { in: unmatchedUnitIds } },
+        select: { suumo_id: true, building: { select: { id: true, suumo_id: true } } }
+      });
+      const rekeyedBuildingIds = new Set<number>();
+      for (const { suumo_id, building } of knownUnits) {
+        const key = keyByUnitId.get(suumo_id);
+        if (!key || existingBuildingsMap.has(key) || rekeyedBuildingIds.has(building.id) || building.suumo_id.startsWith('building-')) {
+          continue;
+        }
+        await prisma.building.update({ where: { id: building.id }, data: { suumo_id: key } });
+        existingBuildingsMap.set(key, { id: building.id, suumo_id: key });
+        rekeyedBuildingIds.add(building.id);
+      }
+    }
+// Process buildings and their units
     for (const buildingKey of Object.keys(buildingMap)) {
       const { building, units } = buildingMap[buildingKey];
       
