@@ -4,13 +4,16 @@ import { useEffect, useState } from "react";
 import { propertyTypes, areas } from "../data/propertyData.js";
 import { enqueueRetrieval, getRetrievalProcessStatus, cancelRetrieval } from "../services/retrievalQueue.server.js";
 import { storeRetrievalStatus } from "../services/redis.server.js";
+import { requireAdminAuth } from "../utils/auth.server.js";
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  await requireAdminAuth(request);
   const status = await getRetrievalProcessStatus();
   return json({ status, propertyTypes, areas });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireAdminAuth(request);
   const formData = await request.formData();
   const action = formData.get("_action") as string;
   
