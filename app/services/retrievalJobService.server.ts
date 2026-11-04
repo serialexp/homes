@@ -2,9 +2,10 @@ import prisma from '../utils/db.server.js';
 import type { RetrievalJob } from '@prisma/client';
 
 /**
- * Create a new retrieval job record
+ * Enqueue a retrieval job record. The worker picks it up via claimNextQueuedJob.
+ * Throws a Prisma P2002 error if another job already holds the active slot.
  */
-export async function createRetrievalJob(data: {
+export async function enqueueRetrievalJob(data: {
   processId: string;
   region?: string;
   province?: string;
@@ -14,12 +15,48 @@ export async function createRetrievalJob(data: {
   return prisma.retrievalJob.create({
     data: {
       processId: data.processId,
-      status: 'running',
+      status: 'queued',
+      activeSlot: 'active',
       region: data.region || null,
       province: data.province || null,
       type: data.type || null,
       refresh: data.refresh
     }
+  });
+}
+
+/**
+ * Atomically move the oldest queued job to 'running' and return it.
+ * Returns null when nothing is queued, or when the job was cancelled between
+ * the read and the update.
+ */
+export async function claimNextQueuedJob(): Promise<RetrievalJob | null> {
+  const next = await prisma.retrievalJob.findFirst({
+    where: { status: 'queued' },
+    orderBy: { id: 'asc' }
+  });
+  if (!next) {
+    return null;
+  }
+
+  const { count } = await prisma.retrievalJob.updateMany({
+    where: { id: next.id, status: 'queued' },
+    data: { status: 'running' }
+  });
+  if (count === 0) {
+    return null;
+  }
+
+  return { ...next, status: 'running' };
+}
+
+/**
+ * Find jobs left 'running' by a previous worker process. Only valid while exactly
+ * one worker runs, since any 'running' row is then necessarily orphaned at startup.
+ */
+export async function findInterruptedJobs(): Promise<RetrievalJob[]> {
+  return prisma.retrievalJob.findMany({
+    where: { status: 'running' }
   });
 }
 
@@ -38,6 +75,7 @@ export async function completeRetrievalJob(processId: string, data: {
     where: { processId },
     data: {
       status: data.status,
+      activeSlot: null,
       endTime: new Date(),
       totalItems: data.totalItems || 0,
       processedItems: data.processedItems || 0,

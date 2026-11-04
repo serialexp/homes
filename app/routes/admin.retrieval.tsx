@@ -2,7 +2,7 @@ import { json, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-r
 import { Form, useActionData, useLoaderData, useNavigation, useSubmit, Link } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { propertyTypes, areas } from "../data/propertyData.js";
-import { startRetrieval, getRetrievalProcessStatus, cancelRetrieval } from "../services/retrieveCommandService.server.js";
+import { enqueueRetrieval, getRetrievalProcessStatus, cancelRetrieval } from "../services/retrievalQueue.server.js";
 import { storeRetrievalStatus } from "../services/redis.server.js";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -65,7 +65,7 @@ export async function action({ request }: ActionFunctionArgs) {
       options.province = province;
     }
     
-    await startRetrieval(options);
+    await enqueueRetrieval(options);
     return json({ success: true, message: "Retrieval process started successfully" });
   } catch (error) {
     return json({ 
@@ -84,6 +84,7 @@ export default function RetrievalPage() {
   
   const [selectedRegion, setSelectedRegion] = useState<string>("all");
   const [currentStatus, setCurrentStatus] = useState(status);
+  const isActive = currentStatus?.status === 'running' || currentStatus?.status === 'queued';
   
   // Refresh status every 2 seconds
   useEffect(() => {
@@ -151,7 +152,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
           <div className="mb-4">
             <div className="flex justify-between mb-1">
               <span className="font-medium">Status: <span className={`font-bold ${
-                currentStatus.status === 'running' ? 'text-blue-600' :
+                isActive ? 'text-blue-600' :
                 currentStatus.status === 'completed' ? 'text-green-600' :
                 currentStatus.status === 'failed' ? 'text-red-600' :
                 currentStatus.status === 'cancelled' ? 'text-yellow-600' : ''
@@ -204,7 +205,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
           {/* Cancel / Reset Buttons */}
           {currentStatus.status !== 'idle' && (
             <div className="mt-4 flex space-x-2">
-              {currentStatus.status === 'running' && (
+              {isActive && (
                 <button
                   type="button"
                   onClick={handleCancel}
@@ -246,7 +247,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
                 id="type" 
                 name="type" 
                 className="w-full p-2 border border-base-300 rounded-md"
-                disabled={isSubmitting || (currentStatus?.status === 'running')}
+                disabled={isSubmitting || isActive}
               >
                 <option value="all">All Property Types</option>
                 {Object.entries(propertyTypes).map(([id, name]) => (
@@ -261,7 +262,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
                 id="region" 
                 name="region" 
                 className="w-full p-2 border border-base-300 rounded-md"
-                disabled={isSubmitting || (currentStatus?.status === 'running')}
+                disabled={isSubmitting || isActive}
                 value={selectedRegion}
                 onChange={(e) => setSelectedRegion(e.target.value)}
               >
@@ -278,7 +279,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
                 id="province" 
                 name="province" 
                 className="w-full p-2 border border-base-300 rounded-md"
-                disabled={isSubmitting || (currentStatus?.status === 'running') || selectedRegion === "all"}
+                disabled={isSubmitting || isActive || selectedRegion === "all"}
               >
                 <option value="all">All Provinces</option>
                 {selectedRegion !== "all" && Object.entries(areas[selectedRegion as keyof typeof areas]?.provinces || {}).map(([id, name]) => (
@@ -293,7 +294,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
                 id="refresh" 
                 name="refresh" 
                 className="h-4 w-4 text-blue-600 border-base-300 rounded"
-                disabled={isSubmitting || (currentStatus?.status === 'running')}
+                disabled={isSubmitting || isActive}
               />
               <label htmlFor="refresh" className="ml-2 block text-sm text-base-content/70">
                 Refresh (clear existing pages)
@@ -304,13 +305,13 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
           <button 
             type="submit" 
             className="w-full md:w-auto px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400"
-            disabled={isSubmitting || (currentStatus?.status === 'running')}
+            disabled={isSubmitting || isActive}
           >
             {isSubmitting ? "Starting..." : "Start Retrieval"}
           </button>
           
-          {currentStatus?.status === 'running' && (
-            <p className="mt-2 text-sm text-red-600">Cannot start a new retrieval while one is already running</p>
+          {isActive && (
+            <p className="mt-2 text-sm text-red-600">Cannot start a new retrieval while one is already queued or running</p>
           )}
         </Form>
       </div>

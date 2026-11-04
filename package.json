@@ -7,6 +7,7 @@
     "build": "remix vite:build",
     "test": "vitest",
     "start": "cross-env NODE_ENV=production tsx server.ts",
+    "worker": "cross-env NODE_ENV=production tsx src/worker.ts",
     "check:fix": "biome check --write src"
   },
   "devDependencies": {

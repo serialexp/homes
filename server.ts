@@ -1,6 +1,5 @@
 import { createRequestHandler } from "@remix-run/express";
 import express from "express";
-import cron from "node-cron";
 
 // Validate required environment variables
 if (!process.env.DATABASE_URL) {
@@ -19,87 +18,15 @@ if (!process.env.MOONSHOT_API_KEY || !process.env.MOONSHOT_ENDPOINT) {
 // Import Remix build
 import * as build from "./build/server/index.js";
 
-// Import the RetrieveCommand service
-import { getRetrieveCommand, startRetrieval } from "./app/services/retrieveCommandService.server.js";
-import { getRedisClient, getRetrievalStatus, storeRetrievalStatus } from "./app/services/redis.server.js";
-import { completeRetrievalJob } from "./app/services/retrievalJobService.server.js";
-
 const app = express();
 app.use(express.static("build/client"));
 
-// Initialize Redis connection
-async function initializeRedis() {
-  try {
-    const redisClient = await getRedisClient();
-    console.log("Redis connection established");
-
-    // Check if a job was running when the server last shut down
-    const previousStatus = await getRetrievalStatus();
-    console.log(`Previous retrieval status: ${previousStatus?.status ?? 'none'}`);
-
-    if (previousStatus && previousStatus.status === 'running') {
-      console.warn(`Retrieval job ${previousStatus.processId || 'unknown'} was interrupted by server restart, marking as failed`);
-
-      // Update Redis status first (always works since Redis is connected)
-      await storeRetrievalStatus({
-        ...previousStatus,
-        status: 'failed',
-        message: 'Interrupted by server restart',
-        endTime: new Date()
-      });
-
-      // Also update the DB job record if we have a process ID
-      if (previousStatus.processId) {
-        try {
-          await completeRetrievalJob(previousStatus.processId, {
-            status: 'failed',
-            totalItems: previousStatus.total,
-            processedItems: previousStatus.progress,
-            errorMessage: 'Interrupted by server restart'
-          });
-          console.log(`Updated DB job record for ${previousStatus.processId}`);
-        } catch (e) {
-          console.error("Failed to update interrupted job record:", e);
-        }
-      }
-    } else if (!previousStatus || previousStatus.status === 'completed' || previousStatus.status === 'failed' || previousStatus.status === 'cancelled') {
-      // Reset to idle on startup if no job is active
-      await storeRetrievalStatus({
-        status: 'idle',
-        message: 'No retrieval process running',
-        progress: 0,
-        total: 0,
-        startTime: new Date(),
-        sectionsToFetch: 0,
-        sectionsProcessed: 0
-      });
-    }
-  } catch (error) {
-    console.error("Failed to connect to Redis:", error);
-  }
-}
-
-// Initialize Redis
-initializeRedis().catch(console.error);
-
-// Schedule the retrieve command to run daily at 10:30
-cron.schedule("30 10 * * *", async () => {
-  console.log("Running scheduled data retrieval...");
-  try {
-    await startRetrieval({ refresh: true });
-    console.log("Data retrieval scheduled successfully");
-  } catch (error) {
-    console.error("Error scheduling data retrieval:", error);
-  }
-});
-
-console.log("Data retrieval scheduler initialized (runs daily at 10:30)");
-
-// Handle all routes with Remix
+// Handle all routes with Remix. Retrieval jobs run in the worker process (src/worker.ts),
+// so this process only serves requests.
 app.all("*", createRequestHandler({ build }));
 
 // Start the server
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`App listening on http://localhost:${port}`);
-}); 
+});

@@ -25,6 +25,25 @@ services:
       caddy: ${CADDY_DOMAIN:-home.jp.serial-experiments.com}
       caddy.reverse_proxy: "{{upstreams 3000}}"
 
+  # Runs retrieval jobs (queued from the admin page and the nightly schedule).
+  # Keep at one replica: startup recovery assumes no other worker holds a running job.
+  worker:
+    build: .
+    restart: unless-stopped
+    command: node_modules/.bin/tsx src/worker.ts
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD:-homes}@mysql:3306/${MYSQL_DATABASE:-homes}
+    depends_on:
+      app:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   mysql:
     image: mysql:8
     restart: unless-stopped

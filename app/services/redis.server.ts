@@ -116,7 +116,7 @@ export async function getRetrievalStatus(): Promise<RetrievalStatus | null> {
   }
   
   const status: RetrievalStatus = {
-    status: data.status as 'idle' | 'running' | 'completed' | 'failed' | 'cancelled',
+    status: data.status as RetrievalStatus['status'],
     message: data.message,
     progress: parseInt(data.progress || '0', 10),
     total: parseInt(data.total || '0', 10),
@@ -169,7 +169,7 @@ export async function isRetrievalCancelled(processId: string): Promise<boolean> 
 export async function cancelRetrievalProcess(): Promise<boolean> {
   const status = await getRetrievalStatus();
   
-  if (!status || status.status !== 'running') {
+  if (!status || (status.status !== 'running' && status.status !== 'queued')) {
     return false;
   }
   
@@ -213,7 +213,7 @@ export async function clearRedisValue(key: string) {
  * Retrieval status interface
  */
 export interface RetrievalStatus {
-  status: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: 'idle' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
   message: string;
   progress: number;
   total: number;

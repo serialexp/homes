@@ -222,7 +222,7 @@ export default function RetrievalHistoryPage() {
                   {job.downloadedPages} / {job.totalPages}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {job.status === 'running' && (
+                  {(job.status === 'running' || job.status === 'queued') && (
                     <Form method="post">
                       <input type="hidden" name="_action" value="mark_failed" />
                       <input type="hidden" name="processId" value={job.processId} />

@@ -192,7 +192,10 @@ model RentalPriceHistory {
 model RetrievalJob {
     id              Int       @id @default(autoincrement())
     processId       String    @unique @db.VarChar(50)
-    status          String    @db.VarChar(20) // 'completed', 'failed', 'cancelled'
+    status          String    @db.VarChar(20) // 'queued', 'running', 'completed', 'failed', 'cancelled'
+    // 'active' while queued or running, NULL otherwise. The unique index makes
+    // "at most one active retrieval" a database guarantee rather than a read-then-write check.
+    activeSlot      String?   @unique @db.VarChar(10)
     startTime       DateTime  @default(now())
     endTime         DateTime?
     region          String?   @db.VarChar(100)

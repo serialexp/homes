@@ -11,6 +11,7 @@ Japan Property Explorer - a web application that scrapes Japanese real estate li
 - **Dev server:** `pnpm dev` (Remix + Vite dev server)
 - **Build:** `pnpm build` (Remix Vite build)
 - **Production:** `pnpm start` (runs `cross-env NODE_ENV=production tsx server.ts`)
+- **Worker:** `pnpm worker` (runs `src/worker.ts`, processes queued retrieval jobs; run one instance alongside the app)
 - **Tests:** `pnpm test` (vitest)
 - **Lint/format:** `pnpm check:fix` (biome check --write src)
 - **Prisma generate:** `npx prisma generate`
@@ -24,13 +25,18 @@ Japan Property Explorer - a web application that scrapes Japanese real estate li
 - **Prisma** ORM with **MySQL** database
 - **Redis** for retrieval job status tracking and cancellation signaling
 - **Tailwind CSS v4** + **DaisyUI** for styling
-- **node-cron** for scheduled daily data retrieval (10:30)
+- **node-cron** for scheduled daily data retrieval (10:30), scheduled by the worker process
 
 ### Server Entry Point
-`server.ts` - Custom Express server that:
-1. Serves the Remix app
-2. Initializes Redis connection
-3. Schedules daily cron job for data retrieval
+`server.ts` - Custom Express server that serves the Remix app. It does not run retrievals.
+
+### Retrieval Worker
+`src/worker.ts` - Separate process (same image, see `docker-compose.yml` `worker` service) that runs retrieval jobs:
+1. Recovers jobs left `running` by a previous worker (marks them failed)
+2. Schedules the daily 10:30 retrieval
+3. Polls MySQL for the oldest `queued` job, claims it atomically, and runs it
+
+Only one worker may run: recovery assumes no other worker holds a running job.
 
 ### Data Retrieval Pipeline
 The core domain logic is a 3-phase scraping pipeline in `src/commands/RetrieveCommand.ts`:
@@ -38,7 +44,7 @@ The core domain logic is a 3-phase scraping pipeline in `src/commands/RetrieveCo
 2. **Download phase** - Downloads all listing pages, caching HTML in the `Page` table to avoid re-fetching
 3. **Processing phase** - Parses cached HTML with XPath/DOM parsing, upserts properties, and tracks price history
 
-The pipeline is orchestrated by `app/services/retrieveCommandService.server.ts` which wraps `RetrieveCommand` with Redis-based progress tracking, cancellation support, and job history recording.
+The pipeline is run by `app/services/retrieveCommandService.server.ts`, which wraps `RetrieveCommand` with Redis-based progress tracking, cancellation support, and job history recording. The admin page enqueues jobs via `app/services/retrievalQueue.server.ts`: a `retrieval_job` row with status `queued` and `activeSlot = 'active'` (a unique index, so only one job can be queued or running). The web process never runs a retrieval itself; the worker claims queued jobs (`app/services/retrievalWorker.server.ts`).
 
 ### Two Prisma Clients
 There are two PrismaClient singletons (both used, for different contexts):

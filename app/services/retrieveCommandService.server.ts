@@ -1,10 +1,9 @@
 import RetrieveCommand from '../../src/commands/RetrieveCommand.js';
-import { storeRetrievalStatus, getRetrievalStatus, RetrievalStatus, isRetrievalCancelled, cancelRetrievalProcess, clearCancellationSignal, updateRetrievalStatusField } from './redis.server.js';
-import { createRetrievalJob, completeRetrievalJob } from './retrievalJobService.server.js';
-import { v4 as uuidv4 } from 'uuid';
+import { storeRetrievalStatus, isRetrievalCancelled, updateRetrievalStatusField } from './redis.server.js';
+import { completeRetrievalJob } from './retrievalJobService.server.js';
+import type { RetrievalJob } from '@prisma/client';
 
-// Create a singleton instance of RetrieveCommand
-const retrieveCommand = new RetrieveCommand();
+const CANCELLED_MESSAGE = 'Retrieval process was cancelled';
 
 /**
  * Calculate estimated completion time based on progress so far
@@ -27,61 +26,6 @@ function calculateEstimatedCompletionTime(
 }
 
 /**
- * Start a new retrieval process
- */
-export async function startRetrieval(options: {
-  region?: string;
-  province?: string;
-  type?: string;
-  refresh?: boolean;
-}) {
-  // Check if a retrieval is already running
-  const currentStatus = await getRetrievalStatus();
-  if (currentStatus && currentStatus.status === 'running') {
-    throw new Error('A retrieval process is already running');
-  }
-
-  // Clear any existing cancellation signal
-  await clearCancellationSignal();
-
-  // Generate a unique process ID
-  const processId = uuidv4();
-
-  // Create a new retrieval job record
-  await createRetrievalJob({
-    processId,
-    region: options.region,
-    province: options.province,
-    type: options.type,
-    refresh: options.refresh || false
-  });
-
-  // Initialize status
-  const initialStatus: RetrievalStatus = {
-    status: 'running',
-    message: 'Starting retrieval process...',
-    progress: 0,
-    total: 0,
-    sectionsToFetch: 0,
-    sectionsProcessed: 0,
-    startTime: new Date(),
-    processId
-  };
-  
-  await storeRetrievalStatus(initialStatus);
-
-  // Start the retrieval process in the background
-  executeRetrieval(options, processId).catch(error => {
-    console.error('Error in retrieval process:', error);
-  });
-
-  return {
-    processId,
-    message: 'Retrieval process started'
-  };
-}
-
-/**
  * Execute the retrieval process
  */
 async function executeRetrieval(options: {
@@ -91,6 +35,9 @@ async function executeRetrieval(options: {
   refresh?: boolean;
 }, processId: string) {
   try {
+    // A fresh command per run: its listeners and cancel flag are per-run state
+    const retrieveCommand = new RetrieveCommand();
+
     // Add event listeners to track progress
     let totalItems = 0;
     let processedItems = 0;
@@ -104,9 +51,8 @@ async function executeRetrieval(options: {
     // Track which phase we're in (2-phase model: calculation → retrieval)
     let currentPhase: 'calculation' | 'retrieval' = 'calculation';
 
-    // Override the original execute method to track progress
-    const originalExecute = retrieveCommand.execute.bind(retrieveCommand);
-    retrieveCommand.execute = async (input) => {
+    // Wrap the run to track progress and record its outcome
+    const runJob = async (input: { region?: string; province?: string; type?: string; refresh?: boolean }) => {
       try {
         // Update status before starting
         await storeRetrievalStatus({
@@ -240,8 +186,12 @@ async function executeRetrieval(options: {
           }
         });
 
-        // Execute the original method
-        const result = await originalExecute(input);
+        const result = await retrieveCommand.execute(input);
+
+        // The command returns normally when cancelled, so check the flag to record a cancellation
+        if (retrieveCommand.cancelled) {
+          throw new Error(CANCELLED_MESSAGE);
+        }
 
         // Update status on completion
         await storeRetrievalStatus({
@@ -268,7 +218,7 @@ async function executeRetrieval(options: {
         return result;
       } catch (error) {
         // Check if the error is due to cancellation
-        if (error instanceof Error && error.message === 'Retrieval process was cancelled') {
+        if (error instanceof Error && error.message === CANCELLED_MESSAGE) {
           await storeRetrievalStatus({
             status: 'cancelled',
             message: 'Retrieval process was cancelled by user',
@@ -320,53 +270,32 @@ async function executeRetrieval(options: {
       }
     };
 
-    // Execute the command
-    return await retrieveCommand.execute(options);
+    return await runJob(options);
   } catch (error) {
-    console.error('Error in executeRetrieval:', error);
+    if (!(error instanceof Error && error.message === CANCELLED_MESSAGE)) {
+      console.error('Error in executeRetrieval:', error);
+    }
     throw error;
   }
 }
 
 /**
- * Get the current retrieval status
+ * Run a job claimed from the queue. Progress and outcome go to Redis and the
+ * retrieval_job row, which is where the web process reads them.
  */
-export async function getRetrievalProcessStatus() {
-  return getRetrievalStatus();
-}
-
-/**
- * Cancel the current retrieval process
- */
-export async function cancelRetrieval() {
-  const status = await getRetrievalStatus();
-  
-  if (!status || status.status !== 'running') {
-    return false;
-  }
-  
-  const success = await cancelRetrievalProcess();
-  
-  // If cancellation was successful and we have a process ID, update the job record
-  if (success && status.processId) {
-    try {
-      await completeRetrievalJob(status.processId, {
-        status: 'cancelled',
-        totalItems: status.total,
-        processedItems: status.progress
-      });
-    } catch (error) {
-      console.error('Error updating retrieval job record:', error);
-      // Don't fail the cancellation if the job record update fails
+export async function runRetrievalJob(job: RetrievalJob) {
+  try {
+    await executeRetrieval({
+      region: job.region ?? undefined,
+      province: job.province ?? undefined,
+      type: job.type ?? undefined,
+      refresh: job.refresh
+    }, job.processId);
+  } catch (error) {
+    // A user cancel is an expected outcome, already recorded in Redis and the job row
+    if (error instanceof Error && error.message === CANCELLED_MESSAGE) {
+      return;
     }
+    throw error;
   }
-  
-  return success;
-}
-
-/**
- * Get the RetrieveCommand instance
- */
-export function getRetrieveCommand() {
-  return retrieveCommand;
 } 
