@@ -13,6 +13,13 @@ interface InputInterface {
   refresh?: boolean
 }
 
+interface ExistingProperty {
+  id: number
+  price: number
+  price_text: string | null
+  last_updated: Date
+}
+
 class RetrieveCommand extends EventEmitter {
   // 30 minute timeout per section as safety net
   private static SECTION_TIMEOUT_MS = 30 * 60 * 1000;
@@ -166,43 +173,7 @@ class RetrieveCommand extends EventEmitter {
     this.cancelled = false;
     if (!process.env.DATABASE_URL) {
       throw new Error("Need DATABASE_URL to be defined.")
-    }
-
-    // Load existing purchase property IDs and their details
-    const existingProperties = await prisma.property.findMany({
-      select: {
-        id: true,
-        suumo_id: true,
-        price: true,
-        price_text: true,
-        last_updated: true
-      }
-    });
-
-    // Create a map of existing properties by suumo_id for quick lookup
-    const existingPropertiesMap: Record<string, { id: number, price: number, price_text: string | null, last_updated: Date }> = {};
-    existingProperties.forEach(item => {
-      existingPropertiesMap[item.suumo_id] = {
-        id: item.id,
-        price: item.price,
-        price_text: item.price_text,
-        last_updated: item.last_updated
-      };
-    });
-
-    // Load existing rental unit IDs upfront for early termination checks
-    const existingRentalUnits = await prisma.rentalUnit.findMany({
-      select: {
-        suumo_id: true,
-        rent: true
-      }
-    });
-    const existingRentalUnitMap: Record<string, { rent: number }> = {};
-    for (const unit of existingRentalUnits) {
-      existingRentalUnitMap[unit.suumo_id] = { rent: unit.rent };
-    }
-
-    // Count the number of sections to fetch
+    }    // Count the number of sections to fetch
     let sectionsToFetch = 0;
     const sectionsToProcess: Array<{regionId: string, provinceId: string, type: string}> = [];
 
@@ -366,9 +337,10 @@ class RetrieveCommand extends EventEmitter {
             }
 
             // Check early termination before processing: count known vs new units
+            const existingRentalUnitMap = await this.findExistingRentalUnits(propertyItems.map(item => item.suumo_id));
             for (const item of propertyItems) {
               if (item.building_suumo_id === 'building-') continue;
-              const existingUnit = existingRentalUnitMap[item.suumo_id];
+              const existingUnit = existingRentalUnitMap.get(item.suumo_id);
               if (existingUnit) {
                 if (existingUnit.rent !== item.rent) {
                   pageUpdatedItems++;
@@ -383,10 +355,6 @@ class RetrieveCommand extends EventEmitter {
             // Process the rental items (handles DB writes)
             await this.processRentalItems(propertyItems, regionId, provinceId);
 
-            // Update the in-memory map with newly seen units
-            for (const item of propertyItems) {
-              existingRentalUnitMap[item.suumo_id] = { rent: item.rent };
-            }
           } else {
             // Purchase properties
             const propertyItems = parseItemsForDB(document, regionId, provinceId);
@@ -398,8 +366,9 @@ class RetrieveCommand extends EventEmitter {
             }
 
             // Check early termination before processing: count known vs new properties
+            const existingPropertiesMap = await this.findExistingProperties(propertyItems.map(item => item.suumo_id));
             for (const item of propertyItems) {
-              const existing = existingPropertiesMap[item.suumo_id];
+              const existing = existingPropertiesMap.get(item.suumo_id);
               if (existing) {
                 if (existing.price !== item.price || existing.price_text !== item.price_text) {
                   pageUpdatedItems++;
@@ -453,11 +422,31 @@ class RetrieveCommand extends EventEmitter {
     return { success: true };
   }
 
+  /**
+   * Stored rows for one page's listings. Looked up per page so memory is bounded
+   * by page size rather than by the size of the table.
+   */
+  private async findExistingProperties(suumoIds: string[]): Promise<Map<string, ExistingProperty>> {
+    const rows = await prisma.property.findMany({
+      where: { suumo_id: { in: suumoIds } },
+      select: { id: true, suumo_id: true, price: true, price_text: true, last_updated: true }
+    });
+    return new Map(rows.map(({ suumo_id, ...existing }) => [suumo_id, existing]));
+  }
+
+  private async findExistingRentalUnits(suumoIds: string[]): Promise<Map<string, { rent: number }>> {
+    const rows = await prisma.rentalUnit.findMany({
+      where: { suumo_id: { in: suumoIds } },
+      select: { suumo_id: true, rent: true }
+    });
+    return new Map(rows.map(row => [row.suumo_id, { rent: row.rent }]));
+  }
+
   private async processPurchaseItems(
     propertyItems: PropertyItemDB[], 
     regionId: string, 
     provinceId: string,
-    existingPropertiesMap: Record<string, { id: number, price: number, price_text: string | null, last_updated: Date }>
+    existingPropertiesMap: Map<string, ExistingProperty>
   ) {
     const newProperties: PropertyItemDB[] = [];
     const priceHistoryEntries: { property_id: number, price: number, price_text: string | null }[] = [];
@@ -486,7 +475,7 @@ class RetrieveCommand extends EventEmitter {
       }
       
       // Check if this property already exists
-      const existingProperty = existingPropertiesMap[item.suumo_id];
+      const existingProperty = existingPropertiesMap.get(item.suumo_id);
       
       if (existingProperty) {
         // Property exists, check if price has changed
@@ -543,27 +532,7 @@ class RetrieveCommand extends EventEmitter {
     rentalItems: RentalUnitDB[], 
     regionId: string, 
     provinceId: string,
-  ) {
-    // Fetch all existing buildings for this region/province upfront
-    const existingBuildings = await prisma.building.findMany({
-      where: {
-        AND: [
-          { region: regionId },
-          { province: provinceId }
-        ]
-      },
-      select: {
-        id: true,
-        suumo_id: true
-      }
-    });
-
-    // Create a lookup map of existing buildings by suumo_id
-    const existingBuildingsMap = new Map(
-      existingBuildings.map(building => [building.suumo_id, building])
-    );
-
-    // Group rental units by building
+  ) {    // Group rental units by building
     const buildingMap: Record<string, {
       building: Prisma.BuildingCreateInput,
       units: RentalUnitDB[]
@@ -608,6 +577,14 @@ class RetrieveCommand extends EventEmitter {
       buildingMap[item.building_suumo_id].units.push(item);
     }
     
+    // Look up only the buildings on this page, by the suumo_id each is stored under
+    const existingBuildingsMap = new Map(
+      (await prisma.building.findMany({
+        where: { suumo_id: { in: Object.values(buildingMap).map(({ building }) => building.suumo_id) } },
+        select: { id: true, suumo_id: true }
+      })).map(building => [building.suumo_id, building])
+    );
+
     // Process buildings and their units
     for (const buildingKey of Object.keys(buildingMap)) {
       const { building, units } = buildingMap[buildingKey];
