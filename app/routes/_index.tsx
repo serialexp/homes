@@ -18,7 +18,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Get counts per property type and total rental units
   const [propertyCounts, rentalCount] = await Promise.all([
     prisma.property.groupBy({
-      by: ['type'],
+      by: ['section_type'],
       _count: true,
     }),
     prisma.rentalUnit.count(),
@@ -26,7 +26,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const countsByType: Record<string, number> = {};
   for (const row of propertyCounts) {
-    if (row.type) countsByType[row.type] = row._count;
+    if (row.section_type) countsByType[row.section_type] = row._count;
   }
 
   return json({
