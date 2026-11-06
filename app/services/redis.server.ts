@@ -102,6 +102,8 @@ export async function storeRetrievalStatus(status: RetrievalStatus) {
   if (status.processId) {
     await setRedisHash(key, 'processId', status.processId);
   }
+
+  await publishRetrievalStatus();
 }
 
 /**
@@ -257,4 +259,39 @@ export async function updateRetrievalStatusField(fields: Partial<RetrievalStatus
   
   // Execute all commands in a single round trip
   await multi.exec();
+
+  await publishRetrievalStatus();
+}
+
+const RETRIEVAL_STATUS_CHANNEL = 'retrieval:status:events';
+
+/**
+ * Publish the current status so admin pages can follow progress without polling.
+ * The worker publishes; the web process forwards to browsers (see subscribeRetrievalStatus).
+ */
+async function publishRetrievalStatus() {
+  const status = await getRetrievalStatus();
+  if (status) {
+    const client = await getRedisClient();
+    await client.publish(RETRIEVAL_STATUS_CHANNEL, JSON.stringify(status));
+  }
+}
+
+/**
+ * Subscribe to status changes. Returns a function that closes the subscription.
+ * Uses its own connection, since a subscribed Redis client can't run other commands.
+ */
+export async function subscribeRetrievalStatus(onStatus: (status: RetrievalStatus) => void): Promise<() => Promise<void>> {
+  const subscriber = (await getRedisClient()).duplicate();
+  subscriber.on('error', err => {
+    console.error('Redis subscriber error:', err);
+  });
+  await subscriber.connect();
+  await subscriber.subscribe(RETRIEVAL_STATUS_CHANNEL, message => {
+    onStatus(JSON.parse(message) as RetrievalStatus);
+  });
+
+  return async () => {
+    await subscriber.quit();
+  };
 } 

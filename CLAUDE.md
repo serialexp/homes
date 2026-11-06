@@ -38,6 +38,8 @@ Japan Property Explorer - a web application that scrapes Japanese real estate li
 
 Only one worker may run: recovery assumes no other worker holds a running job.
 
+Every request to suumo.jp waits at least `RETRIEVAL_REQUEST_INTERVAL_MS` after the previous one. Rate limits and server errors are retried with backoff (honouring `Retry-After`); a page that still fails after five attempts fails the run. Progress is published on Redis as it changes, and the admin page follows it over `/admin/retrieval/events` (server-sent events).
+
 ### Data Retrieval Pipeline
 The core domain logic is a 3-phase scraping pipeline in `src/commands/RetrieveCommand.ts`:
 1. **Calculation phase** - Fetches first page of each region/province/type combo to count total items and pages
@@ -77,3 +79,4 @@ There are two PrismaClient singletons (both used, for different contexts):
 - `DATABASE_URL` - MySQL connection string (required)
 - `REDIS_URL` - Redis connection string (defaults to `redis://localhost:6379`)
 - `PORT` - Server port (defaults to 3000)
+- `RETRIEVAL_REQUEST_INTERVAL_MS` - Minimum gap between requests to suumo.jp in the worker (defaults to 3000)

@@ -89,24 +89,13 @@ export default function RetrievalPage() {
   const [currentStatus, setCurrentStatus] = useState(status);
   const isActive = currentStatus?.status === 'running' || currentStatus?.status === 'queued';
   
-  // Refresh status every 2 seconds
+  // Follow progress as the worker publishes it, instead of polling
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch("/admin/retrieval/status", {
-          headers: { "Accept": "application/json" },
-        });
-        if (!response.ok) return;
-        const contentType = response.headers.get("content-type");
-        if (!contentType?.includes("application/json")) return;
-        const data = await response.json();
-        setCurrentStatus(data.status);
-      } catch (error) {
-        console.error("Error fetching status:", error);
-      }
-    }, 2000);
-    
-    return () => clearInterval(interval);
+    const events = new EventSource("/admin/retrieval/events");
+    events.onmessage = event => {
+      setCurrentStatus(JSON.parse(event.data));
+    };
+    return () => events.close();
   }, []);
   
   // Handle cancel button click
