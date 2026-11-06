@@ -3,7 +3,7 @@
  * without the network or real timers.
  */
 
-export const DEFAULT_REQUEST_INTERVAL_MS = 3000;
+export const DEFAULT_REQUEST_INTERVAL_MS = 500;
 export const MAX_FETCH_ATTEMPTS = 5;
 const BASE_RETRY_DELAY_MS = 30_000;
 const MAX_RETRY_DELAY_MS = 10 * 60_000;

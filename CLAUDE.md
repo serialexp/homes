@@ -79,4 +79,4 @@ There are two PrismaClient singletons (both used, for different contexts):
 - `DATABASE_URL` - MySQL connection string (required)
 - `REDIS_URL` - Redis connection string (defaults to `redis://localhost:6379`)
 - `PORT` - Server port (defaults to 3000)
-- `RETRIEVAL_REQUEST_INTERVAL_MS` - Minimum gap between requests to suumo.jp in the worker (defaults to 3000)
+- `RETRIEVAL_REQUEST_INTERVAL_MS` - Minimum gap between requests to suumo.jp in the worker (defaults to 500, i.e. two requests per second)
