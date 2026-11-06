@@ -45,6 +45,9 @@ model Property {
     floor_area_ratio         Int?           @default(0)
     price_per_tsubo          Float?         @default(0)
     type                     String?        @db.VarChar(100)
+    // Search section the property was listed under ('021' second-hand house, '030' land, ...).
+    // Null until the property is scraped again after this column was added.
+    section_type             String?        @db.VarChar(10)
     train_line               String         @db.VarChar(100)
     train_station            String         @db.VarChar(100)
     station_distance         Int            @default(0) @map("station_distance_foot")
@@ -72,6 +75,7 @@ model Property {
     priceHistory             PriceHistory[]
 
     @@index([suumo_id])
+    @@index([section_type, region, province])
     @@map("property")
 }
 

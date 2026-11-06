@@ -12,7 +12,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   const provinceCounts = await prisma.property.groupBy({
     by: ['region', 'province'],
-    where: { type: typeId },
+    where: { section_type: typeId },
     _count: true,
   });
 

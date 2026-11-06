@@ -80,6 +80,7 @@ export interface PropertyItemDB {
   
   // Property metadata
   property_type: string;
+  section_type?: string | null; // Search section the item was listed under, set by the caller
   property_tags?: string; // Comma-separated string
   title?: string;
   url: string;

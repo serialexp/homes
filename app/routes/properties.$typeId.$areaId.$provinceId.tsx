@@ -43,7 +43,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   // Query the database for properties matching the criteria
   const countTotal = await prisma.property.count({
     where: {
-      type: typeId,
+      section_type: typeId,
       region: areaId,
       province: provinceId
     }
@@ -51,7 +51,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   
   const properties = await prisma.property.findMany({
     where: {
-      type: typeId,
+      section_type: typeId,
       region: areaId,
       province: provinceId
     },

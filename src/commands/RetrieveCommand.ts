@@ -17,6 +17,7 @@ interface ExistingProperty {
   id: number
   price: number
   price_text: string | null
+  section_type: string | null
   last_updated: Date
 }
 
@@ -357,7 +358,8 @@ class RetrieveCommand extends EventEmitter {
 
           } else {
             // Purchase properties
-            const propertyItems = parseItemsForDB(document, regionId, provinceId);
+            // The search section is the only place the listing type ('021' second-hand house, ...) is known
+            const propertyItems = parseItemsForDB(document, regionId, provinceId).map(item => ({ ...item, section_type: type }));
             pageTotalItems = propertyItems.length;
 
             if (pageTotalItems === 0) {
@@ -429,7 +431,7 @@ class RetrieveCommand extends EventEmitter {
   private async findExistingProperties(suumoIds: string[]): Promise<Map<string, ExistingProperty>> {
     const rows = await prisma.property.findMany({
       where: { suumo_id: { in: suumoIds } },
-      select: { id: true, suumo_id: true, price: true, price_text: true, last_updated: true }
+      select: { id: true, suumo_id: true, price: true, price_text: true, section_type: true, last_updated: true }
     });
     return new Map(rows.map(({ suumo_id, ...existing }) => [suumo_id, existing]));
   }
@@ -493,8 +495,15 @@ class RetrieveCommand extends EventEmitter {
             data: {
               price: item.price,
               price_text: item.price_text || null,
+              section_type: item.section_type,
               last_updated: new Date()
             }
+          });
+        } else if (existingProperty.section_type !== item.section_type) {
+          // Same price, but first scraped under a search section that didn't record one
+          propertyUpdates.push({
+            where: { id: existingProperty.id },
+            data: { section_type: item.section_type }
           });
         }
       } else {
