@@ -215,7 +215,7 @@ class RetrieveCommand extends EventEmitter {
   };
 
   // Base URL for purchase properties (sorted by 新着・更新順 = newest/updated first via po=1&pj=2)
-  private purchaseBase = 'https://suumo.jp/jj/bukken/ichiran/JJ012FC001/?ar={area}&bs={type}&ta={province}&pn={page}&ekTjCd=&ekTjNm=&kb=1&kj=9&km=1&kt=9999999&ta=13&tb=0&tj=0&tt=9999999&po=1&pj=2&pc=100';
+  private purchaseBase = 'https://suumo.jp/jj/bukken/ichiran/JJ012FC001/?ar={area}&bs={type}&ta={province}&pn={page}&ekTjCd=&ekTjNm=&kb=1&kj=9&km=1&kt=9999999&tb=0&tj=0&tt=9999999&po=1&pj=2&pc=100';
 
   // Base URL for rental properties (sorted by 新着順 = newest first via po1=09)
   private rentalBase = 'https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar={area}&bs={type}&ta={province}&page={page}&pc=50&po1=09&cb=0.0&ct=9999999&et=9999999&cn=9999999&mb=0&mt=9999999&shkr1=03&shkr2=03&shkr3=03&shkr4=03&fw2=&srch_navi=1';
