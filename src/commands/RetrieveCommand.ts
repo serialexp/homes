@@ -2,7 +2,7 @@ import { DOMParser } from "@xmldom/xmldom";
 import prisma from '../../app/utils/db.server.js';
 import { EventEmitter } from 'events';
 import { Prisma } from '@prisma/client';
-import { parseItemsForDB, PropertyItemDB, simpleXPathSelect1 } from '../../app/utils/parseUtils.js';
+import { locationFromAddress, parseItemsForDB, PropertyItemDB, simpleXPathSelect1 } from '../../app/utils/parseUtils.js';
 import { parseRentalUnitsForDB, RentalUnitDB } from '../../app/utils/rentalParseUtils.js';
 import { processStationInfo } from '../../app/utils/trainUtils.server.js';
 import {
@@ -37,6 +37,8 @@ interface ExistingProperty {
   price: number
   price_text: string | null
   section_type: string | null
+  region: string
+  province: string
   last_updated: Date
 }
 
@@ -440,8 +442,13 @@ class RetrieveCommand extends EventEmitter {
 
           } else {
             // Purchase properties
-            // The search section is the only place the listing type ('021' second-hand house, ...) is known
-            const propertyItems = parseItemsForDB(document, regionId, provinceId).map(item => ({ ...item, section_type: type }));
+            // The listing's address decides region and province. The search section gives the
+            // listing type ('021' second-hand house, ...) and the fallback for an address with no prefecture.
+            const propertyItems = parseItemsForDB(document, regionId, provinceId).map(item => ({
+              ...item,
+              ...locationFromAddress(item.state, { region: regionId, province: provinceId }),
+              section_type: type
+            }));
             pageTotalItems = propertyItems.length;
 
             if (pageTotalItems === 0) {
@@ -455,7 +462,7 @@ class RetrieveCommand extends EventEmitter {
             for (const item of propertyItems) {
               const existing = existingPropertiesMap.get(item.suumo_id);
               if (existing) {
-                if (existing.price !== item.price || existing.price_text !== item.price_text) {
+                if (existing.price !== item.price || existing.price_text !== item.price_text || existing.region !== item.region || existing.province !== item.province) {
                   pageUpdatedItems++;
                 } else {
                   pageKnownUnchangedItems++;
@@ -518,7 +525,7 @@ class RetrieveCommand extends EventEmitter {
   private async findExistingProperties(suumoIds: string[]): Promise<Map<string, ExistingProperty>> {
     const rows = await prisma.property.findMany({
       where: { suumo_id: { in: suumoIds } },
-      select: { id: true, suumo_id: true, price: true, price_text: true, section_type: true, last_updated: true }
+      select: { id: true, suumo_id: true, price: true, price_text: true, section_type: true, region: true, province: true, last_updated: true }
     });
     return new Map(rows.map(({ suumo_id, ...existing }) => [suumo_id, existing]));
   }
@@ -583,14 +590,17 @@ class RetrieveCommand extends EventEmitter {
               price: item.price,
               price_text: item.price_text || null,
               section_type: item.section_type,
+              region: item.region,
+              province: item.province,
               last_updated: new Date()
             }
           });
-        } else if (existingProperty.section_type !== item.section_type) {
-          // Same price, but first scraped under a search section that didn't record one
+        } else if (existingProperty.section_type !== item.section_type || existingProperty.region !== item.region || existingProperty.province !== item.province) {
+          // Same price, but the section type or the location from the address has changed
+          // (the first scrape may have recorded a search section instead of the address)
           propertyUpdates.push({
             where: { id: existingProperty.id },
-            data: { section_type: item.section_type }
+            data: { section_type: item.section_type, region: item.region, province: item.province }
           });
         }
       } else {
