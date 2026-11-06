@@ -1,4 +1,5 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
+import { useMemo } from "react";
 import { Link, useLoaderData, useParams } from "@remix-run/react";
 import { propertyTypes, areas } from "../data/propertyData.js";
 import prisma from "../utils/db.server.js";
@@ -36,6 +37,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
 export default function AreasPage() {
   const { areas, selectedType, countsByProvince } = useLoaderData<typeof loader>();
 
+  // Flatten region -> prefecture -> count into prefecture -> count for the map.
+  const countByProvince = useMemo(() => {
+    const flat: Record<string, number> = {};
+    for (const provinces of Object.values(countsByProvince)) {
+      for (const [provinceId, count] of Object.entries(provinces)) flat[provinceId] = count;
+    }
+    return flat;
+  }, [countsByProvince]);
+
   // Each prefecture belongs to exactly one area; the map links to the same page as the list row.
   const areaOfProvince: Record<string, string> = {};
   for (const [areaId, area] of Object.entries(areas)) {
@@ -52,8 +62,8 @@ export default function AreasPage() {
       </div>
       
       <div className="flex flex-col lg:flex-row gap-6 items-start">
-        <div className="w-full lg:w-96 shrink-0 lg:sticky lg:top-4">
-          <PrefectureMap hrefFor={hrefFor} />
+        <div className="w-full lg:w-[560px] shrink-0 lg:sticky lg:top-4">
+          <PrefectureMap hrefFor={hrefFor} counts={countByProvince} />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-w-0">
         {Object.entries(areas).map(([areaId, area]) => (
