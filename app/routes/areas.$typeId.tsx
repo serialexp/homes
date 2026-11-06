@@ -2,6 +2,7 @@ import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData, useParams } from "@remix-run/react";
 import { propertyTypes, areas } from "../data/propertyData.js";
 import prisma from "../utils/db.server.js";
+import { PrefectureMap } from "../components/PrefectureMap.js";
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const typeId = params.typeId;
@@ -34,6 +35,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 export default function AreasPage() {
   const { areas, selectedType, countsByProvince } = useLoaderData<typeof loader>();
+
+  // Each prefecture belongs to exactly one area; the map links to the same page as the list row.
+  const areaOfProvince: Record<string, string> = {};
+  for (const [areaId, area] of Object.entries(areas)) {
+    for (const provinceId of Object.keys(area.provinces)) areaOfProvince[provinceId] = areaId;
+  }
+  const hrefFor = (provinceId: string) =>
+    areaOfProvince[provinceId] ? `/properties/${selectedType.id}/${areaOfProvince[provinceId]}/${provinceId}` : undefined;
   
   return (
     <div className="container mx-auto p-4">
@@ -42,7 +51,11 @@ export default function AreasPage() {
         <h2 className="text-2xl font-bold mt-2">Select Area for {selectedType.name}</h2>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        <div className="w-full lg:w-96 shrink-0 lg:sticky lg:top-4">
+          <PrefectureMap hrefFor={hrefFor} />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-w-0">
         {Object.entries(areas).map(([areaId, area]) => (
           <div key={areaId} className="bg-base-100 border border-base-300 rounded-lg shadow p-6">
             <h3 className="text-xl font-semibold mb-1">{area.name}</h3>
@@ -66,6 +79,7 @@ export default function AreasPage() {
             </div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   );
