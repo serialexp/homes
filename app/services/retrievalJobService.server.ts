@@ -1,5 +1,6 @@
 import prisma from '../utils/db.server.js';
 import type { RetrievalJob } from '@prisma/client';
+import type { SectionSummary } from '../../src/commands/RetrieveCommand.js';
 
 /**
  * Enqueue a retrieval job record. The worker picks it up via claimNextQueuedJob.
@@ -83,6 +84,47 @@ export async function completeRetrievalJob(processId: string, data: {
       downloadedPages: data.downloadedPages || 0,
       errorMessage: data.errorMessage
     }
+  });
+}
+
+/**
+ * Store what one search section did during a job, as it finishes.
+ */
+export async function recordRetrievalJobSection(processId: string, section: SectionSummary) {
+  await prisma.retrievalJob.update({
+    where: { processId },
+    data: {
+      sections: {
+        create: {
+          sectionKey: section.sectionKey,
+          regionId: section.regionId,
+          provinceId: section.provinceId,
+          sectionType: section.sectionType,
+          calcTotalItems: section.calcTotalItems,
+          scrapedPages: section.scrapedPages,
+          computedPages: section.computedPages,
+          totalPages: section.totalPages,
+          pagesFetched: section.pagesFetched,
+          itemsProcessed: section.itemsProcessed,
+          newItems: section.newItems,
+          updatedItems: section.updatedItems,
+          stopReason: section.stopReason,
+          startedAt: section.startedAt,
+          finishedAt: section.finishedAt,
+          errorMessage: section.errorMessage
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Get a retrieval job with its per-section rows, in the order the sections ran.
+ */
+export async function getRetrievalJobWithSections(id: number) {
+  return prisma.retrievalJob.findUnique({
+    where: { id },
+    include: { sections: { orderBy: { id: 'asc' } } }
   });
 }
 

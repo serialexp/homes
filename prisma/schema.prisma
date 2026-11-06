@@ -211,8 +211,39 @@ model RetrievalJob {
     totalPages      Int       @default(0)
     downloadedPages Int       @default(0)
     errorMessage    String?   @db.Text
+    sections        RetrievalJobSection[]
 
     @@map("retrieval_job")
+}
+
+// One row per search section (region, province, listing type) a job worked through.
+// Written as each section finishes, so a job that stops early still shows where and why.
+model RetrievalJobSection {
+    id             Int         @id @default(autoincrement())
+    jobId          Int
+    job            RetrievalJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+    sectionKey     String      @db.VarChar(100)
+    regionId       String      @db.VarChar(10)
+    provinceId     String      @db.VarChar(10)
+    sectionType    String      @db.VarChar(10)
+    // Result total Suumo reported on page 1, and the page counts derived from it.
+    calcTotalItems Int
+    scrapedPages   Int
+    computedPages  Int
+    // Pages the retrieval loop was allowed to walk: max(scraped, computed, 1), capped.
+    totalPages     Int
+    pagesFetched   Int
+    itemsProcessed Int
+    newItems       Int
+    updatedItems   Int
+    // completed | caught-up | timed-out | cancelled | no-items | failed
+    stopReason     String      @db.VarChar(20)
+    startedAt      DateTime
+    finishedAt     DateTime
+    errorMessage   String?     @db.Text
+
+    @@index([jobId])
+    @@map("retrieval_job_section")
 }
 
 // New model for train lines

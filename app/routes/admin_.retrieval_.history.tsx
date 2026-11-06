@@ -222,6 +222,12 @@ export default function RetrievalHistoryPage() {
                   {job.downloadedPages} / {job.totalPages}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <Link
+                    to={`/admin/retrieval/history/${job.id}`}
+                    className="text-blue-600 hover:text-blue-800 font-medium mr-4"
+                  >
+                    Sections
+                  </Link>
                   {(job.status === 'running' || job.status === 'queued') && (
                     <Form method="post">
                       <input type="hidden" name="_action" value="mark_failed" />

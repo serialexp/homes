@@ -40,6 +40,37 @@ interface ExistingProperty {
   last_updated: Date
 }
 
+/** Why a section's retrieval loop stopped. */
+export type SectionStopReason = 'completed' | 'caught-up' | 'timed-out' | 'cancelled' | 'no-items' | 'failed';
+
+/** What one section did, emitted as `section-finished` when its retrieval loop ends. */
+export interface SectionSummary {
+  sectionKey: string;
+  regionId: string;
+  provinceId: string;
+  sectionType: string;
+  calcTotalItems: number;
+  scrapedPages: number;
+  computedPages: number;
+  totalPages: number;
+  pagesFetched: number;
+  itemsProcessed: number;
+  newItems: number;
+  updatedItems: number;
+  stopReason: SectionStopReason;
+  startedAt: Date;
+  finishedAt: Date;
+  errorMessage: string | null;
+}
+
+/** Page figures from the calculation phase, held per section until its retrieval loop runs. */
+interface SectionCalc {
+  calcTotalItems: number;
+  scrapedPages: number;
+  computedPages: number;
+  totalPages: number;
+}
+
 class RetrieveCommand extends EventEmitter {
   // 30 minute timeout per section as safety net
   private static SECTION_TIMEOUT_MS = 30 * 60 * 1000;
@@ -60,6 +91,7 @@ class RetrieveCommand extends EventEmitter {
   on(event: 'section-progress', listener: (sectionKey: string, page: number, totalPages: number, newItems: number, updatedItems: number) => void): this;
   on(event: 'section-early-stop', listener: (sectionKey: string, page: number, totalPages: number) => void): this;
   on(event: 'section-timeout', listener: (sectionKey: string, page: number, totalPages: number) => void): this;
+  on(event: 'section-finished', listener: (summary: SectionSummary) => void): this;
   on(event: string, listener: (...args: any[]) => void): this {
     return super.on(event, listener);
   }
@@ -73,6 +105,7 @@ class RetrieveCommand extends EventEmitter {
   emit(event: 'section-progress', sectionKey: string, page: number, totalPages: number, newItems: number, updatedItems: number): boolean;
   emit(event: 'section-early-stop', sectionKey: string, page: number, totalPages: number): boolean;
   emit(event: 'section-timeout', sectionKey: string, page: number, totalPages: number): boolean;
+  emit(event: 'section-finished', summary: SectionSummary): boolean;
   emit(event: string, ...args: any[]): boolean {
     return super.emit(event, ...args);
   }
@@ -228,7 +261,7 @@ class RetrieveCommand extends EventEmitter {
     // ~280 sections that was multiple GB of resident memory held for the whole
     // run. The retrieval phase re-fetches page 1, which is cheap relative to the
     // full multi-hundred-page sweep each section already does.
-    const sectionPageCounts: Map<string, number> = new Map();
+    const sectionCalc: Map<string, SectionCalc> = new Map();
 
     for (const section of sectionsToProcess) {
       if (this.cancelled) {
@@ -262,7 +295,12 @@ class RetrieveCommand extends EventEmitter {
           RetrieveCommand.MAX_PAGES_PER_SECTION,
           Math.max(parsedPages, computedPages, 1)
         );
-        sectionPageCounts.set(sectionKey, sectionTotalPages);
+        sectionCalc.set(sectionKey, {
+          calcTotalItems: sectionTotalItems,
+          scrapedPages: parsedPages,
+          computedPages,
+          totalPages: sectionTotalPages
+        });
 
         sectionsCalculated++;
         this.emit('sections-processed', sectionsCalculated);
@@ -295,9 +333,10 @@ class RetrieveCommand extends EventEmitter {
 
       const { regionId, provinceId, type } = section;
       const sectionKey = `${regionId}-${provinceId}-${type}`;
-      const sectionTotalPages = sectionPageCounts.get(sectionKey) || 0;
+      const calc = sectionCalc.get(sectionKey);
+      const sectionTotalPages = calc?.totalPages ?? 0;
 
-      if (sectionTotalPages === 0) {
+      if (!calc || sectionTotalPages === 0) {
         sectionsProcessed++;
         this.emit('sections-processed', sectionsProcessed);
         continue;
@@ -313,13 +352,34 @@ class RetrieveCommand extends EventEmitter {
       let sectionProcessedItems = 0;
       let sectionNewItems = 0;
       let sectionUpdatedItems = 0;
-      let earlyStop = false;
-      let timedOut = false;
+      let stopReason: SectionStopReason = 'completed';
+      let pagesFetched = 0;
+      let errorMessage: string | null = null;
+      const sectionStartedAt = new Date();
+      const summarize = (): SectionSummary => ({
+        sectionKey,
+        regionId,
+        provinceId,
+        sectionType: type,
+        calcTotalItems: calc.calcTotalItems,
+        scrapedPages: calc.scrapedPages,
+        computedPages: calc.computedPages,
+        totalPages: calc.totalPages,
+        pagesFetched,
+        itemsProcessed: sectionProcessedItems,
+        newItems: sectionNewItems,
+        updatedItems: sectionUpdatedItems,
+        stopReason,
+        startedAt: sectionStartedAt,
+        finishedAt: new Date(),
+        errorMessage
+      });
 
       try {
         for (let page = 1; page <= sectionTotalPages; page++) {
           if (this.cancelled) {
             console.log('Retrieval cancelled');
+            stopReason = 'cancelled';
             break;
           }
 
@@ -328,7 +388,7 @@ class RetrieveCommand extends EventEmitter {
           if (elapsed > RetrieveCommand.SECTION_TIMEOUT_MS) {
             console.log(`Section ${sectionKey} timed out after ${Math.round(elapsed / 60000)} minutes on page ${page}/${sectionTotalPages}`);
             this.emit('section-timeout', sectionKey, page, sectionTotalPages);
-            timedOut = true;
+            stopReason = 'timed-out';
             break;
           }
 
@@ -337,9 +397,10 @@ class RetrieveCommand extends EventEmitter {
 
           // Fetch the page. Page 1 was also fetched in the calculation phase, but
           // we re-fetch it rather than hold its multi-MB DOM in memory across the
-          // whole run (see sectionPageCounts note above). Suumo sorts by recency
+          // whole run (see sectionCalc note above). Suumo sorts by recency
           // and changes every request anyway, so a fresh fetch is also correct.
           const document = await this.fetchPageFromSuumo(page, regionId, provinceId, type);
+          pagesFetched++;
 
           // Parse and process items immediately
           let pageNewItems = 0;
@@ -354,6 +415,7 @@ class RetrieveCommand extends EventEmitter {
 
             if (pageTotalItems === 0) {
               console.log(`No items found on page ${page}`);
+              stopReason = 'no-items';
               break;
             }
 
@@ -384,6 +446,7 @@ class RetrieveCommand extends EventEmitter {
 
             if (pageTotalItems === 0) {
               console.log(`No items found on page ${page}`);
+              stopReason = 'no-items';
               break;
             }
 
@@ -420,7 +483,7 @@ class RetrieveCommand extends EventEmitter {
             if (consecutiveAllKnownPages >= RetrieveCommand.EARLY_STOP_THRESHOLD) {
               console.log(`Section ${sectionKey}: caught up after page ${page}/${sectionTotalPages} (${consecutiveAllKnownPages} consecutive all-known pages)`);
               this.emit('section-early-stop', sectionKey, page, sectionTotalPages);
-              earlyStop = true;
+              stopReason = 'caught-up';
               break;
             }
           } else {
@@ -429,13 +492,16 @@ class RetrieveCommand extends EventEmitter {
         }
 
         const elapsed = Math.round((Date.now() - sectionStartTime) / 1000);
-        const stopReason = earlyStop ? 'caught up' : timedOut ? 'timed out' : this.cancelled ? 'cancelled' : 'completed all pages';
         console.log(`Section ${sectionKey}: ${stopReason} in ${elapsed}s — ${sectionNewItems} new, ${sectionUpdatedItems} updated, ${sectionProcessedItems} total items`);
 
       } catch (error) {
+        stopReason = 'failed';
+        errorMessage = error instanceof Error ? error.message : String(error);
         console.error(`Error retrieving section ${sectionKey}:`, error);
+        this.emit('section-finished', summarize());
         throw error;
       }
+      this.emit('section-finished', summarize());
 
       sectionsProcessed++;
       this.emit('sections-processed', sectionsProcessed);

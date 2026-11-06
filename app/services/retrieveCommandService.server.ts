@@ -1,6 +1,6 @@
-import RetrieveCommand from '../../src/commands/RetrieveCommand.js';
+import RetrieveCommand, { type SectionSummary } from '../../src/commands/RetrieveCommand.js';
 import { storeRetrievalStatus, isRetrievalCancelled, updateRetrievalStatusField } from './redis.server.js';
-import { completeRetrievalJob } from './retrievalJobService.server.js';
+import { completeRetrievalJob, recordRetrievalJobSection } from './retrievalJobService.server.js';
 import type { RetrievalJob } from '@prisma/client';
 
 const CANCELLED_MESSAGE = 'Retrieval process was cancelled';
@@ -47,6 +47,9 @@ async function executeRetrieval(options: {
     let lastStatusUpdate = Date.now();
     const UPDATE_INTERVAL = 2000; // Update status at most every 2 seconds
     let processingStartTime: Date | null = null;
+    // Section rows are written as each section finishes. They must all be stored
+    // before the job row is marked done, so every path awaits this list.
+    const sectionWrites: Promise<void>[] = [];
 
     // Track which phase we're in (2-phase model: calculation → retrieval)
     let currentPhase: 'calculation' | 'retrieval' = 'calculation';
@@ -186,7 +189,16 @@ async function executeRetrieval(options: {
           }
         });
 
+        retrieveCommand.on('section-finished', (summary: SectionSummary) => {
+          sectionWrites.push(
+            recordRetrievalJobSection(processId, summary).catch(error => {
+              console.error(`Could not record section ${summary.sectionKey} for job ${processId}:`, error);
+            })
+          );
+        });
+
         const result = await retrieveCommand.execute(input);
+        await Promise.all(sectionWrites);
 
         // The command returns normally when cancelled, so check the flag to record a cancellation
         if (retrieveCommand.cancelled) {
@@ -217,6 +229,7 @@ async function executeRetrieval(options: {
 
         return result;
       } catch (error) {
+        await Promise.all(sectionWrites);
         // Check if the error is due to cancellation
         if (error instanceof Error && error.message === CANCELLED_MESSAGE) {
           await storeRetrievalStatus({
