@@ -20,7 +20,7 @@ export default function AdminIndex() {
           <div className="flex flex-col space-y-2">
             <Link 
               to="/admin/retrieval" 
-              className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 text-center"
+              className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 text-center"
             >
               Retrieval Dashboard
             </Link>
@@ -41,7 +41,7 @@ export default function AdminIndex() {
           </p>
           <Link 
             to="/admin/xpath-debug" 
-            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 block text-center"
+            className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 block text-center"
           >
             Open XPath Debugger
           </Link>
@@ -55,7 +55,7 @@ export default function AdminIndex() {
           </p>
           <Link
             to="/admin/rentals"
-            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 block text-center"
+            className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 block text-center"
           >
             Manage Rentals
           </Link>
@@ -70,7 +70,7 @@ export default function AdminIndex() {
           </p>
           <Link
             to="/admin/reconcile"
-            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 block text-center"
+            className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 block text-center"
           >
             Open Reconciliation
           </Link>

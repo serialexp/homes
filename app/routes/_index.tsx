@@ -54,7 +54,7 @@ export default function Index() {
             className="block p-6 bg-base-100 border border-base-300 rounded-lg shadow hover:bg-base-200"
           >
             <h3 className="text-xl font-semibold">{rentalType.name}</h3>
-            <p className="mt-1 text-2xl font-bold text-blue-600">{rentalCount.toLocaleString()}</p>
+            <p className="mt-1 text-2xl font-bold text-primary">{rentalCount.toLocaleString()}</p>
             <p className="mt-1 text-base-content/70">Browse rental properties across Japan</p>
           </Link>
         </div>
@@ -71,7 +71,7 @@ export default function Index() {
               className="block p-6 bg-base-100 border border-base-300 rounded-lg shadow hover:bg-base-200"
             >
               <h3 className="text-xl font-semibold">{String(typeName)}</h3>
-              <p className="mt-1 text-2xl font-bold text-blue-600">{(countsByType[typeId] || 0).toLocaleString()}</p>
+              <p className="mt-1 text-2xl font-bold text-primary">{(countsByType[typeId] || 0).toLocaleString()}</p>
               <p className="mt-1 text-base-content/70">Browse {String(typeName).toLowerCase()} properties</p>
             </Link>
           ))}

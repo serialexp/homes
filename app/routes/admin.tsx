@@ -30,7 +30,7 @@ export default function AdminLayout() {
               className={({ isActive }) =>
                 `px-3 py-1 rounded whitespace-nowrap ${
                   isActive
-                    ? "bg-blue-600 text-white"
+                    ? "bg-primary text-white"
                     : "text-base-content/70 hover:bg-base-300"
                 }`
               }

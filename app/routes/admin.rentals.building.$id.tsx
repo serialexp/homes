@@ -140,7 +140,7 @@ export default function BuildingDetails() {
                   <td className="py-3 px-6 text-center">
                     <Link 
                       to={`/admin/rentals/unit/${unit.id}`}
-                      className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 mr-2"
+                      className="px-3 py-1 bg-primary text-white rounded hover:bg-primary/85 mr-2"
                     >
                       Details
                     </Link>

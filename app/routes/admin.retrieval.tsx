@@ -130,7 +130,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
         <h2 className="text-2xl font-bold mb-6">Property Data Retrieval</h2>
         <Link 
           to="/admin/retrieval/history" 
-          className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700"
+          className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85"
         >
           View History
         </Link>
@@ -144,7 +144,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
           <div className="mb-4">
             <div className="flex justify-between mb-1">
               <span className="font-medium">Status: <span className={`font-bold ${
-                isActive ? 'text-blue-600' :
+                isActive ? 'text-primary' :
                 currentStatus.status === 'completed' ? 'text-green-600' :
                 currentStatus.status === 'failed' ? 'text-red-600' :
                 currentStatus.status === 'cancelled' ? 'text-yellow-600' : ''
@@ -166,7 +166,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
               </div>
               <div className="w-full mt-2 bg-base-300 rounded-full h-2.5">
                 <div 
-                  className="bg-blue-600 h-2.5 rounded-full" 
+                  className="bg-primary h-2.5 rounded-full" 
                   style={{ width: `${progressPercentage}%` }}
                 ></div>
               </div>
@@ -285,7 +285,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
                 type="checkbox" 
                 id="refresh" 
                 name="refresh" 
-                className="h-4 w-4 text-blue-600 border-base-300 rounded"
+                className="h-4 w-4 text-primary border-base-300 rounded"
                 disabled={isSubmitting || isActive}
               />
               <label htmlFor="refresh" className="ml-2 block text-sm text-base-content/70">
@@ -296,7 +296,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
           
           <button 
             type="submit" 
-            className="w-full md:w-auto px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+            className="w-full md:w-auto px-6 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 disabled:bg-gray-400"
             disabled={isSubmitting || isActive}
           >
             {isSubmitting ? "Starting..." : "Start Retrieval"}

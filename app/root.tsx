@@ -48,13 +48,16 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
           <link rel="icon" href="data:image/x-icon;base64,AA" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <meta charSet="utf-8" />
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
           <title>{title}</title>
           <Meta />
           <Links />
         </head>
         <body className="bg-base-200 text-base-content font-sans m-0">
           <header>
-            <h1 className="text-blue-600 p-4 m-0 border-b border-base-300 bg-base-100 shadow">
+            <h1 className="text-primary p-4 m-0 border-b border-base-300 bg-base-100 shadow">
               Japan Property Explorer
             </h1>
           </header>
@@ -63,7 +66,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
             <p className="text-lg text-base-content/60 mb-8">{message}</p>
             <a
               href="/"
-              className="text-blue-600 underline text-base"
+              className="text-primary underline text-base"
             >
               Go back home
             </a>
@@ -91,6 +94,9 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
           <meta name="keywords" content="Japan, property, real estate, explorer, search, find, buy, sell, rent, apartment, house, land, commercial, investment" />
           <meta name="robots" content="index, follow" />
           <meta charSet="utf-8" />
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
           <Meta />
           <Links />
           <style>
@@ -105,8 +111,8 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
         </head>
         <body className="bg-base-200 text-base-content font-sans leading-relaxed">
           {isLoading && (
-            <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-blue-200">
-              <div className="h-full bg-blue-600 animate-loading-bar" />
+            <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-primary/20">
+              <div className="h-full bg-primary animate-loading-bar" />
             </div>
           )}
           <header>
@@ -118,8 +124,8 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
                   </a>
                   {isAdmin && (
                     <>
-                      <a href="/admin/retrieval" className="text-blue-600 hover:text-blue-800">Admin</a>
-                      <a href="/admin/xpath-debug" className="text-blue-600 hover:text-blue-800">XPath Debug</a>
+                      <a href="/admin/retrieval" className="text-primary hover:text-base-content">Admin</a>
+                      <a href="/admin/xpath-debug" className="text-primary hover:text-base-content">XPath Debug</a>
                     </>
                   )}
                 </div>

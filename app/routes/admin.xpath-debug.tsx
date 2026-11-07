@@ -72,7 +72,7 @@ export default function XPathDebugPage() {
                     <Link 
                       to={`/admin/xpath-debug/${page.id}`}
                       
-                      className="text-blue-600 hover:text-blue-800 underline"
+                      className="text-primary hover:text-base-content underline"
                     >
                       Debug
                     </Link>

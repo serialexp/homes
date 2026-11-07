@@ -411,7 +411,7 @@ export default function XPathDebugDetailPage() {
   return (
     <div className="w-full p-4">
       <div className="mb-4">
-        <Link to="/admin/xpath-debug" className="text-blue-600 hover:text-blue-800">
+        <Link to="/admin/xpath-debug" className="text-primary hover:text-base-content">
           &larr; Back to Pages List
         </Link>
       </div>
@@ -432,7 +432,7 @@ export default function XPathDebugDetailPage() {
                 href={page.url} 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800 break-all"
+                className="text-primary hover:text-base-content break-all"
               >
                 {page.url}
               </a>
@@ -448,7 +448,7 @@ export default function XPathDebugDetailPage() {
             <button
               type="button"
               onClick={() => setShowHtml(!showHtml)}
-              className={`px-4 py-2 ${showHtml ? 'bg-blue-600 text-white' : 'bg-base-300'} rounded hover:bg-blue-700 hover:text-white`}
+              className={`px-4 py-2 ${showHtml ? 'bg-primary text-white' : 'bg-base-300'} rounded hover:bg-primary/85 hover:text-white`}
             >
               {showHtml ? 'Hide HTML' : 'Show HTML'}
             </button>
@@ -456,7 +456,7 @@ export default function XPathDebugDetailPage() {
             <button
               type="button"
               onClick={() => setShowDomTree(!showDomTree)}
-              className={`px-4 py-2 ${showDomTree ? 'bg-blue-600 text-white' : 'bg-base-300'} rounded hover:bg-blue-700 hover:text-white`}
+              className={`px-4 py-2 ${showDomTree ? 'bg-primary text-white' : 'bg-base-300'} rounded hover:bg-primary/85 hover:text-white`}
             >
               {showDomTree ? 'Hide DOM Tree' : 'Show DOM Tree'}
             </button>
@@ -525,7 +525,7 @@ export default function XPathDebugDetailPage() {
                 <input type="hidden" name="_action" value="parse_rental" />
                 <button
                   type="submit"
-                  className={`w-full px-4 py-2 ${isRentalPage ? 'bg-blue-600' : 'bg-gray-600'} text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400`}
+                  className={`w-full px-4 py-2 ${isRentalPage ? 'bg-primary' : 'bg-gray-600'} text-white font-medium rounded-md hover:bg-primary/85 disabled:bg-gray-400`}
                   disabled={isSubmitting}
                   title={isRentalPage ? "This is a rental page" : "This may not be a rental page"}
                 >
@@ -563,7 +563,7 @@ export default function XPathDebugDetailPage() {
             
             <button
               type="submit"
-              className="w-full px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+              className="w-full px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 disabled:bg-gray-400"
               disabled={isSubmitting}
             >
               {isSubmitting ? "Executing..." : "Execute Query"}
@@ -625,11 +625,11 @@ export default function XPathDebugDetailPage() {
           </h3>
           
           <div className="mb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-blue-50 p-4 rounded">
-              <p className="text-lg font-bold text-blue-800">
+            <div className="bg-primary/5 p-4 rounded">
+              <p className="text-lg font-bold text-primary">
                 {(actionData as ClassAnalysisData).analysis.totalElements}
               </p>
-              <p className="text-sm text-blue-600">Total Elements</p>
+              <p className="text-sm text-primary">Total Elements</p>
             </div>
             
             <div className="bg-green-50 p-4 rounded">

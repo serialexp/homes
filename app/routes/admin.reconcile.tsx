@@ -165,7 +165,7 @@ export default function ReconcilePage() {
               <span
                 className={`font-bold ${
                   status.status === "running"
-                    ? "text-blue-600"
+                    ? "text-primary"
                     : status.status === "completed"
                       ? "text-green-600"
                       : status.status === "failed"
@@ -184,7 +184,7 @@ export default function ReconcilePage() {
             <div className="w-full bg-base-300 rounded-full h-2.5 mb-3">
               <div
                 className={`h-2.5 rounded-full ${
-                  status.status === "failed" ? "bg-red-600" : "bg-blue-600"
+                  status.status === "failed" ? "bg-red-600" : "bg-primary"
                 }`}
                 style={{ width: `${pct}%` }}
               />
@@ -374,7 +374,7 @@ export default function ReconcilePage() {
             type="button"
             onClick={() => run("reconcile")}
             disabled={running}
-            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+            className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 disabled:bg-gray-400"
           >
             Dry run
           </button>
@@ -392,7 +392,7 @@ export default function ReconcilePage() {
               type="button"
               onClick={() => run("merge")}
               disabled={running}
-              className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+              className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 disabled:bg-gray-400"
             >
               Preview merge
             </button>
@@ -416,7 +416,7 @@ export default function ReconcilePage() {
         </div>
 
         {running && (
-          <p className="text-sm text-blue-600">
+          <p className="text-sm text-primary">
             A job is running — buttons are disabled until it finishes.
           </p>
         )}

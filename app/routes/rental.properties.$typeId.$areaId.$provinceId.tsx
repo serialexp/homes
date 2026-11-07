@@ -336,7 +336,7 @@ export default function RentalPropertiesPage() {
       )}
 
       <div className="mb-6">
-        <Link to={`/rental/areas/${selectedType.id}`} className="text-blue-600 hover:underline">
+        <Link to={`/rental/areas/${selectedType.id}`} className="text-primary hover:underline">
           ← Back to Areas
         </Link>
         <h2 className="text-2xl font-bold mt-2">
@@ -517,7 +517,7 @@ export default function RentalPropertiesPage() {
                               href={unit.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 flex-shrink-0"
+                              className="px-2 py-0.5 bg-primary text-white text-xs rounded hover:bg-primary/85 flex-shrink-0"
                             >
                               Suumo
                             </a>
@@ -585,7 +585,7 @@ export default function RentalPropertiesPage() {
                                 href={unit.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-block px-2 py-0.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                                className="inline-block px-2 py-0.5 bg-primary text-white text-xs rounded hover:bg-primary/85"
                               >
                                 Suumo
                               </a>
@@ -616,7 +616,7 @@ export default function RentalPropertiesPage() {
                   className={`mx-1 px-3 py-1 rounded ${
                     currentPage <= 1 
                       ? 'bg-base-300 text-base-content/60 cursor-not-allowed' 
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-primary text-white hover:bg-primary/85'
                   }`}
                 >
                   Previous
@@ -641,8 +641,8 @@ export default function RentalPropertiesPage() {
                         onClick={() => handlePageChange(pageNum)}
                         className={`mx-1 px-3 py-1 rounded ${
                           currentPage === pageNum
-                            ? 'bg-blue-700 text-white'
-                            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                            ? 'bg-primary text-white'
+                            : 'bg-primary/10 text-primary hover:bg-primary/20'
                         }`}
                       >
                         {pageNum}
@@ -655,7 +655,7 @@ export default function RentalPropertiesPage() {
                       <span className="mx-1">...</span>
                       <button
                         onClick={() => handlePageChange(totalPages)}
-                        className="mx-1 px-3 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                        className="mx-1 px-3 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20"
                       >
                         {totalPages}
                       </button>
@@ -669,7 +669,7 @@ export default function RentalPropertiesPage() {
                   className={`mx-1 px-3 py-1 rounded ${
                     currentPage >= totalPages
                       ? 'bg-base-300 text-base-content/60 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-primary text-white hover:bg-primary/85'
                   }`}
                 >
                   Next

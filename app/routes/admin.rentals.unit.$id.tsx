@@ -98,7 +98,7 @@ export default function RentalUnitDetails() {
                 <h3 className="text-lg font-medium mb-2">Tags</h3>
                 <div className="flex flex-wrap gap-2">
                   {rentalUnit.tags.split(',').map((tag, index) => (
-                    <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">
+                    <span key={index} className="px-2 py-1 bg-primary/10 text-primary rounded text-sm">
                       {tag.trim()}
                     </span>
                   ))}

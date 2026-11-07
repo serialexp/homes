@@ -124,7 +124,7 @@ export default function RetrievalHistoryPage() {
       case 'cancelled':
         return 'bg-yellow-100 text-yellow-800';
       case 'running':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-primary/10 text-primary';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -146,7 +146,7 @@ export default function RetrievalHistoryPage() {
           </Form>
           <Link
             to="/admin/retrieval"
-            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700"
+            className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85"
           >
             Back to Retrieval
           </Link>
@@ -224,7 +224,7 @@ export default function RetrievalHistoryPage() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <Link
                     to={`/admin/retrieval/history/${job.id}`}
-                    className="text-blue-600 hover:text-blue-800 font-medium mr-4"
+                    className="text-primary hover:text-base-content font-medium mr-4"
                   >
                     Sections
                   </Link>
@@ -266,7 +266,7 @@ export default function RetrievalHistoryPage() {
                 to={`?page=${page}`}
                 className={`px-4 py-2 text-sm font-medium ${
                   page === currentPage
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-primary text-white'
                     : 'bg-base-100 text-base-content/70 hover:bg-base-200'
                 } ${
                   page === 1 ? 'rounded-l-md' : ''

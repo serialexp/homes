@@ -49,7 +49,7 @@ export default function RetrievalJobSectionsPage() {
         </div>
         <Link
           to="/admin/retrieval/history"
-          className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700"
+          className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85"
         >
           Back to History
         </Link>

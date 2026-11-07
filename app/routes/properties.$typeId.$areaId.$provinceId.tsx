@@ -225,7 +225,7 @@ export default function PropertiesPage() {
   return (
     <div className="container mx-auto p-4">
       <div className="mb-6">
-        <Link to={`/areas/${selectedType.id}`} className="text-blue-600 hover:underline">
+        <Link to={`/areas/${selectedType.id}`} className="text-primary hover:underline">
           ← Back to Areas
         </Link>
         <h2 className="text-2xl font-bold mt-2">
@@ -285,7 +285,7 @@ export default function PropertiesPage() {
                       href={property.url} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="block text-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded"
+                      className="block text-center bg-primary hover:bg-primary/85 text-white font-medium py-2 px-4 rounded"
                     >
                       Website
                     </a>
@@ -304,7 +304,7 @@ export default function PropertiesPage() {
                 className={`mx-1 px-3 py-1 rounded ${
                   currentPage <= 1 
                     ? 'bg-base-300 text-base-content/60 cursor-not-allowed' 
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-primary text-white hover:bg-primary/85'
                 }`}
               >
                 Previous
@@ -330,8 +330,8 @@ export default function PropertiesPage() {
                       onClick={() => handlePageChange(pageNum)}
                       className={`mx-1 px-3 py-1 rounded ${
                         currentPage === pageNum
-                          ? 'bg-blue-700 text-white'
-                          : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                          ? 'bg-primary text-white'
+                          : 'bg-primary/10 text-primary hover:bg-primary/20'
                       }`}
                     >
                       {pageNum}
@@ -344,7 +344,7 @@ export default function PropertiesPage() {
                     <span className="mx-1">...</span>
                     <button
                       onClick={() => handlePageChange(totalPages)}
-                      className="mx-1 px-3 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                      className="mx-1 px-3 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20"
                     >
                       {totalPages}
                     </button>
@@ -358,7 +358,7 @@ export default function PropertiesPage() {
                 className={`mx-1 px-3 py-1 rounded ${
                   currentPage >= totalPages
                     ? 'bg-base-300 text-base-content/60 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-primary text-white hover:bg-primary/85'
                 }`}
               >
                 Next
@@ -430,7 +430,7 @@ export default function PropertiesPage() {
                     <div className="flex overflow-x-auto space-x-2 mb-4 pb-2">
                       <button 
                         onClick={() => setCurrentImageIndex(0)}
-                        className={`flex-shrink-0 w-16 h-16 rounded ${currentImageIndex === 0 ? 'ring-2 ring-blue-500' : ''}`}
+                        className={`flex-shrink-0 w-16 h-16 rounded ${currentImageIndex === 0 ? 'ring-2 ring-primary' : ''}`}
                       >
                         <img 
                           src={optimizeImageUrl(selectedProperty.main_image_url, 100, 100)} 
@@ -442,7 +442,7 @@ export default function PropertiesPage() {
                         <button 
                           key={index}
                           onClick={() => setCurrentImageIndex(index + 1)}
-                          className={`flex-shrink-0 w-16 h-16 rounded ${currentImageIndex === index + 1 ? 'ring-2 ring-blue-500' : ''}`}
+                          className={`flex-shrink-0 w-16 h-16 rounded ${currentImageIndex === index + 1 ? 'ring-2 ring-primary' : ''}`}
                         >
                           <img 
                             src={optimizeImageUrl(url, 100, 100)} 
@@ -526,7 +526,7 @@ export default function PropertiesPage() {
                     href={selectedProperty.url} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded"
+                    className="block w-full text-center bg-primary hover:bg-primary/85 text-white font-medium py-2 px-4 rounded"
                   >
                     View on Website
                   </a>
@@ -549,7 +549,7 @@ export default function PropertiesPage() {
                       <h3 className="text-lg font-semibold mb-2">Property Tags</h3>
                       <div className="flex flex-wrap gap-2">
                         {selectedProperty.property_tags.split(',').map((tag: string, index: number) => (
-                          <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                          <span key={index} className="bg-primary/10 text-primary text-xs px-2 py-1 rounded">
                             {tag.trim()}
                           </span>
                         ))}

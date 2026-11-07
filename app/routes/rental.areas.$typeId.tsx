@@ -44,7 +44,7 @@ export default function RentalAreasPage() {
   return (
     <div className="container mx-auto p-4">
       <div className="mb-6">
-        <Link to="/" className="text-blue-600 hover:underline">← Back to Property Types</Link>
+        <Link to="/" className="text-primary hover:underline">← Back to Property Types</Link>
         <h2 className="text-2xl font-bold mt-2">Select Area for {selectedType.name} Properties</h2>
       </div>
       
