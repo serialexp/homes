@@ -6,7 +6,9 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
     Outlet,
     Scripts,
     isRouteErrorResponse,
+    Link,
     useLoaderData,
+    useLocation,
     useNavigation,
     useRouteError,
   } from "@remix-run/react";
@@ -77,9 +79,22 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
     );
   }
 
-  export default function App() {
+  // Which top-level section a path belongs to, for the header's active link.
+function sectionOf(pathname: string): "rent" | "buy" | null {
+  if (pathname.startsWith("/rental")) return "rent";
+  if (pathname === "/" || pathname.startsWith("/areas") || pathname.startsWith("/properties")) return "buy";
+  return null;
+}
+
+function navLinkClass(active: boolean): string {
+  return `rounded-lg px-3.5 py-2.5 font-medium text-base-content no-underline hover:bg-base-200 ${active ? "bg-base-300/60 font-semibold" : ""}`;
+}
+
+export default function App() {
     const { isAdmin, version } = useLoaderData<typeof loader>();
     const navigation = useNavigation();
+    const location = useLocation();
+    const section = sectionOf(location.pathname);
     const isLoading = navigation.state === "loading";
     return (
       <html lang="en">
@@ -114,48 +129,59 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
             <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-primary/20">
               <div className="h-full bg-primary animate-loading-bar" />
             </div>
-          )}
-          <header>
-            <nav className="bg-base-100 border-b border-base-300 px-4 py-2">
-              <div className="container mx-auto flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <a href="/">
-                    <img src="/logo.png" alt="Japan Property Explorer" className="h-12 sm:h-14" />
-                  </a>
-                  {isAdmin && (
-                    <>
-                      <a href="/admin/retrieval" className="text-primary hover:text-base-content">Admin</a>
-                      <a href="/admin/xpath-debug" className="text-primary hover:text-base-content">XPath Debug</a>
-                    </>
-                  )}
-                </div>
-                <div>
+          )}          <header className="border-b border-base-300 bg-base-100">
+            <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-8">
+              <Link to="/" className="flex items-center gap-2.5 text-base-content no-underline">
+                <span aria-hidden="true" className="size-[22px] shrink-0 rounded-full bg-accent" />
+                <span className="font-display text-[19px] font-bold tracking-[-0.01em]">Japan Property Explorer</span>
+              </Link>
+              <nav aria-label="Main" className="flex items-center gap-1">
+                <Link
+                  to="/rental/areas/040"
+                  aria-current={section === "rent" ? "page" : undefined}
+                  className={navLinkClass(section === "rent")}
+                >
+                  Rent
+                </Link>
+                <Link
+                  to="/"
+                  aria-current={section === "buy" ? "page" : undefined}
+                  className={navLinkClass(section === "buy")}
+                >
+                  Buy
+                </Link>
+                {isAdmin && (
+                  <>
+                    <Link to="/admin/retrieval" className="px-3 py-2 text-sm font-medium text-primary hover:text-base-content">Admin</Link>
+                    <Link to="/admin/xpath-debug" className="px-3 py-2 text-sm font-medium text-primary hover:text-base-content">XPath Debug</Link>
+                  </>
+                )}
+                <div className="ml-2 flex size-11 items-center justify-center">
                   {isAdmin ? (
                     <form method="post" action="/admin/logout">
-                      <button type="submit" className="text-base-content/40 hover:text-base-content/60" title="Logout">
+                      <button type="submit" className="flex size-11 items-center justify-center rounded-lg text-base-content/60 hover:text-base-content" title="Logout" aria-label="Logout">
                         <SignOut size={20} />
                       </button>
                     </form>
                   ) : (
-                    <a href="/admin/login" className="text-base-content/40 hover:text-base-content/60" title="Login">
+                    <Link to="/admin/login" className="flex size-11 items-center justify-center rounded-lg text-base-content/60 hover:text-base-content" title="Login" aria-label="Login">
                       <SignIn size={20} />
-                    </a>
+                    </Link>
                   )}
                 </div>
-              </div>
-            </nav>
+              </nav>
+            </div>
           </header>
           <main>
             <Outlet />
-          </main>
-
-          <footer className="mt-16 border-t border-base-300 px-4 py-3 text-center text-xs text-base-content/40">
+          </main>          <footer className="mx-auto mt-20 flex max-w-[1280px] flex-wrap justify-between gap-4 border-t border-base-300 px-4 pb-8 pt-6 text-[13px] text-base-content/60 sm:px-8">
+            <span>Listing data from suumo.jp · refreshed daily at 10:30 JST</span>
             {version.commitUrl ? (
               <a
                 href={version.commitUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="hover:text-base-content/60"
+                className="text-base-content/60 hover:text-base-content"
                 title={version.buildTime ? `Built ${version.buildTime}` : undefined}
               >
                 version {version.sha}
