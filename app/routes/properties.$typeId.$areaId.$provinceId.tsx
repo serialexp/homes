@@ -12,6 +12,7 @@ import {
 } from "../utils/listingFilters.js";
 import prisma from "../utils/db.server.js";
 import { translateAndUpdateProperties } from "../utils/translation.server.js";
+import { Pagination } from "../components/Pagination.js";
 
 type ListingRow = Prisma.PropertyGetPayload<{ include: { priceHistory: true } }>;
 
@@ -84,13 +85,6 @@ const WALK_OPTIONS = [
   { value: "10", label: "10 min or less" },
   { value: "15", label: "15 min or less" },
 ];
-
-const PAGER_BASE = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-field px-3.5 text-sm no-underline";
-const PAGER_IDLE = `${PAGER_BASE} border border-base-300 bg-base-100 font-medium text-base-content hover:bg-base-200`;
-const PAGER_CURRENT = `${PAGER_BASE} border border-neutral bg-neutral font-semibold text-neutral-content`;
-const PAGER_DISABLED = `${PAGER_BASE} border border-base-300 bg-base-100 text-base-content/40`;
-
-const PAGE_WINDOW = 5;
 
 interface FilterOption {
   value: string;
@@ -201,10 +195,6 @@ export default function PropertiesPage() {
   const firstShown = (currentPage - 1) * LISTINGS_PER_PAGE + 1;
   const lastShown = Math.min(currentPage * LISTINGS_PER_PAGE, countTotal);
 
-  const windowStart = Math.max(1, Math.min(currentPage - 2, totalPages - PAGE_WINDOW + 1));
-  const windowEnd = Math.min(totalPages, windowStart + PAGE_WINDOW - 1);
-  const pages = Array.from({ length: windowEnd - windowStart + 1 }, (_, i) => windowStart + i);
-
   return (
     <div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-4 pb-4 pt-8 sm:px-8">
       <nav aria-label="Breadcrumb" className="flex flex-wrap gap-2 text-sm text-base-content/60">
@@ -253,51 +243,12 @@ export default function PropertiesPage() {
             ))}
           </div>
 
-          {totalPages > 1 && (
-            <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-4">
-              <span className="text-sm text-base-content/70">
-                Showing {firstShown}–{lastShown} of {countTotal.toLocaleString("en-US")}
-              </span>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {currentPage > 1 ? (
-                  <Link to={pageHref(currentPage - 1)} className={PAGER_IDLE}>Previous</Link>
-                ) : (
-                  <span aria-disabled="true" className={PAGER_DISABLED}>Previous</span>
-                )}
-
-                {windowStart > 1 && (
-                  <>
-                    <Link to={pageHref(1)} className={PAGER_IDLE}>1</Link>
-                    {windowStart > 2 && <span aria-hidden="true" className="px-1 text-base-content/60">…</span>}
-                  </>
-                )}
-
-                {pages.map((page) => (
-                  <Link
-                    key={page}
-                    to={pageHref(page)}
-                    aria-current={page === currentPage ? "page" : undefined}
-                    className={page === currentPage ? PAGER_CURRENT : PAGER_IDLE}
-                  >
-                    {page}
-                  </Link>
-                ))}
-
-                {windowEnd < totalPages && (
-                  <>
-                    {windowEnd < totalPages - 1 && <span aria-hidden="true" className="px-1 text-base-content/60">…</span>}
-                    <Link to={pageHref(totalPages)} className={PAGER_IDLE}>{totalPages}</Link>
-                  </>
-                )}
-
-                {currentPage < totalPages ? (
-                  <Link to={pageHref(currentPage + 1)} className={PAGER_IDLE}>Next</Link>
-                ) : (
-                  <span aria-disabled="true" className={PAGER_DISABLED}>Next</span>
-                )}
-              </div>
-            </nav>
-          )}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageHref={pageHref}
+            summary={`Showing ${firstShown}–${lastShown} of ${countTotal.toLocaleString("en-US")}`}
+          />
         </>
       )}
     </div>
