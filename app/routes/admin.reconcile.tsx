@@ -32,15 +32,24 @@ import {
   PANEL,
   StatusPill,
 } from "../components/AdminUi.js";
+import { Pagination } from "../components/Pagination.js";
+import { proposalPage, type ProposalPage } from "../utils/proposalPage.js";
 
-export async function loader({ request: _request }: LoaderFunctionArgs) {
+/** Proposal rows per page on the review table. */
+const PROPOSALS_PER_PAGE = 50;
+
+export async function loader({ request }: LoaderFunctionArgs) {
   const status = await getReconcileJobStatus();
-  // Only ship the (potentially large) proposal list once a dry run has
-  // completed — not on every running-state poll.
-  const proposals =
-    status?.status === "completed" && status.mode === "reconcile"
-      ? await getStoredProposals()
-      : null;
+  // Only load the proposals once a dry run has completed, and send one page of them:
+  // the table shows a page at a time, and the page is not re-sent on every running-state poll.
+  let proposals: ProposalPage<LineProposal> | null = null;
+  if (status?.status === "completed" && status.mode === "reconcile") {
+    const stored = await getStoredProposals();
+    if (stored) {
+      const requested = Number.parseInt(new URL(request.url).searchParams.get("page") ?? "1", 10);
+      proposals = proposalPage(stored, requested, PROPOSALS_PER_PAGE);
+    }
+  }
   return json({ status, proposals });
 }
 
@@ -142,7 +151,9 @@ export default function ReconcilePage() {
       ? Math.round((status.processed / status.total) * 100)
       : 0;
 
-  const changedCount = proposals?.filter((p) => p.changed).length ?? 0;
+  const changedCount = proposals?.changedTotal ?? 0;
+  const shownFrom = proposals ? (proposals.currentPage - 1) * PROPOSALS_PER_PAGE + 1 : 0;
+  const shownTo = proposals ? Math.min(proposals.currentPage * PROPOSALS_PER_PAGE, proposals.total) : 0;
   const hasApplyable = changedCount > 0;
 
   const applyChanges = () => {
@@ -217,9 +228,9 @@ export default function ReconcilePage() {
             </div>
           </li>
           <li
-            aria-current={proposals && proposals.length > 0 ? "step" : undefined}
+            aria-current={proposals && proposals.total > 0 ? "step" : undefined}
             className={`flex flex-col gap-3 border-b border-base-300/60 p-5 md:border-b-0 md:border-r ${
-              proposals && proposals.length > 0 ? "bg-base-200/60" : ""
+              proposals && proposals.total > 0 ? "bg-base-200/60" : ""
             }`}
           >
             <span className="flex items-center gap-2.5">
@@ -227,8 +238,8 @@ export default function ReconcilePage() {
               <span className="font-semibold">Review</span>
             </span>
             <span className="text-sm text-base-content/70">
-              {proposals && proposals.length > 0
-                ? `${changedCount} of ${proposals.length} rows would change. Check them in the table below.`
+              {proposals && proposals.total > 0
+                ? `${changedCount} of ${proposals.total} rows would change. Check them in the table below.`
                 : "Review the stored proposals once a dry run has completed."}
             </span>
           </li>
@@ -352,13 +363,13 @@ export default function ReconcilePage() {
       )}
 
       {/* Proposal preview (after a completed dry run) */}
-      {proposals && proposals.length > 0 && (
+      {proposals && proposals.total > 0 && (
         <section aria-labelledby="prev-h" className={`${PANEL} overflow-hidden`}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 px-5 py-4">
             <h2 id="prev-h" className="m-0 text-lg font-semibold">
               Proposed changes{" "}
               <span className="font-medium tabular-nums text-base-content/60">
-                — {changedCount} of {proposals.length} rows would change
+                — {changedCount} of {proposals.total} rows would change
               </span>
             </h2>
           </div>
@@ -375,11 +386,7 @@ export default function ReconcilePage() {
                 </tr>
               </thead>
               <tbody>
-                {[...proposals]
-                  .sort(
-                    (a, b) => Number(b.changed) - Number(a.changed) || a.id - b.id
-                  )
-                  .map((p: LineProposal) => (
+                {proposals.rows.map((p: LineProposal) => (
                     <tr
                       key={p.id}
                       className={`border-t border-base-300/60 ${p.changed ? "bg-warning/5" : "opacity-60"}`}
@@ -413,6 +420,14 @@ export default function ReconcilePage() {
                   ))}
               </tbody>
             </table>
+          </div>
+          <div className="border-t border-base-300 px-5 py-4">
+            <Pagination
+              currentPage={proposals.currentPage}
+              totalPages={proposals.totalPages}
+              summary={`Showing ${shownFrom}–${shownTo} of ${proposals.total}`}
+              pageHref={(page) => (page <= 1 ? "?" : `?page=${page}`)}
+            />
           </div>
         </section>
       )}
