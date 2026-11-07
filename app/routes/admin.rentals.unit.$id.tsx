@@ -1,6 +1,8 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData, Link } from "@remix-run/react";
 import prisma from '../utils/db.server.js';
+import { BUTTON_SECONDARY, LABEL, PageHeader, PANEL } from "../components/AdminUi.js";
+import { parseStations } from "../utils/stations.js";
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const unitId = parseInt(params.id || "0");
@@ -27,164 +29,152 @@ export async function loader({ params }: LoaderFunctionArgs) {
   return json({ rentalUnit });
 }
 
+const HEAD_CELL = "whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-[0.05em] text-base-content/70";
+
 export default function RentalUnitDetails() {
   const { rentalUnit } = useLoaderData<typeof loader>();
   
   // Parse stations JSON
-  const stations = JSON.parse(rentalUnit.building.stations || '[]');
+  const stations = parseStations(rentalUnit.building.stations);
   
   // Parse image URLs if they exist
   const imageUrls = rentalUnit.image_urls ? rentalUnit.image_urls.split(',') : [];
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Rental Unit Details</h1>
-        <Link 
-          to={`/admin/rentals/building/${rentalUnit.building_id}`} 
-          className="px-3 py-1 bg-base-300 text-base-content rounded hover:bg-base-200"
-        >
-          Back to Building
-        </Link>
-      </div>
+    <>
+      <PageHeader
+        title="Rental Unit Details"
+        description={`Unit #${rentalUnit.id} · ${rentalUnit.building.title || rentalUnit.building.address}`}
+        actions={
+          <Link to={`/admin/rentals/building/${rentalUnit.building_id}`} className={BUTTON_SECONDARY}>
+            Back to building
+          </Link>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         {/* Unit Details */}
-        <div className="md:col-span-2">
-          <div className="bg-base-100 rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Unit Information</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <h3 className="text-lg font-medium mb-2">Basic Details</h3>
-                <div className="space-y-2">
-                  <p><span className="font-medium">Layout:</span> {rentalUnit.layout}</p>
-                  <p><span className="font-medium">Floor:</span> {rentalUnit.floor}</p>
-                  <p><span className="font-medium">Size:</span> {rentalUnit.size_text || `${rentalUnit.size} m²`}</p>
-                  <p><span className="font-medium">Rent:</span> {rentalUnit.rent_text || `¥${rentalUnit.rent.toLocaleString()}`}</p>
-                  <p><span className="font-medium">Management Fee:</span> {rentalUnit.management_fee_text || `¥${rentalUnit.management_fee.toLocaleString()}`}</p>
-                  <p><span className="font-medium">Deposit:</span> {rentalUnit.deposit}</p>
-                  <p><span className="font-medium">Gratuity:</span> {rentalUnit.gratuity}</p>
-                </div>
+        <div className="flex min-w-0 flex-col gap-6">
+          <section aria-labelledby="unit-h" className={`${PANEL} flex flex-col gap-6 p-6`}>
+            <h2 id="unit-h" className="m-0 text-lg font-semibold">Unit information</h2>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="flex flex-col gap-3">
+                <h3 className={`m-0 ${LABEL}`}>Basic details</h3>
+                <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                  <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Layout</dt><dd className="m-0 font-medium">{rentalUnit.layout ?? "—"}</dd></div>
+                  <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Floor</dt><dd className="m-0 font-medium">{rentalUnit.floor ?? "—"}</dd></div>
+                  <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Size</dt><dd className="m-0 font-medium">{rentalUnit.size_text || `${rentalUnit.size} m²`}</dd></div>
+                  <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Rent</dt><dd className="m-0 font-semibold tabular-nums">{rentalUnit.rent_text || `¥${rentalUnit.rent.toLocaleString()}`}</dd></div>
+                  <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Management fee</dt><dd className="m-0 font-medium tabular-nums">{rentalUnit.management_fee_text || `¥${rentalUnit.management_fee.toLocaleString()}`}</dd></div>
+                  <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Deposit</dt><dd className="m-0 font-medium">{rentalUnit.deposit ?? "—"}</dd></div>
+                  <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Gratuity</dt><dd className="m-0 font-medium">{rentalUnit.gratuity ?? "—"}</dd></div>
+                </dl>
               </div>
-              
-              <div>
-                <h3 className="text-lg font-medium mb-2">Building Information</h3>
-                <div className="space-y-2">
-                  <p><span className="font-medium">Building:</span> {rentalUnit.building.title || rentalUnit.building.address}</p>
-                  <p><span className="font-medium">Type:</span> {rentalUnit.building.building_type}</p>
-                  <p><span className="font-medium">Age:</span> {rentalUnit.building.age}</p>
-                  <p><span className="font-medium">Address:</span> {rentalUnit.building.address}</p>
-                </div>
-                
-                <h3 className="text-lg font-medium mt-4 mb-2">Stations</h3>
+
+              <div className="flex flex-col gap-3">
+                <h3 className={`m-0 ${LABEL}`}>Building information</h3>
+                <dl className="m-0 grid gap-x-4 gap-y-3 text-sm">
+                  <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Building</dt><dd className="m-0 font-medium">{rentalUnit.building.title || rentalUnit.building.address}</dd></div>
+                  <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Type</dt><dd className="m-0 font-medium">{rentalUnit.building.building_type}</dd></div>
+                  <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Age</dt><dd className="m-0 font-medium">{rentalUnit.building.age ?? "—"}</dd></div>
+                  <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Address</dt><dd className="m-0 font-medium">{rentalUnit.building.address}</dd></div>
+                </dl>
+
+                <h3 className={`m-0 mt-2 ${LABEL}`}>Stations</h3>
                 {stations.length > 0 ? (
-                  <ul className="list-disc pl-5 space-y-1">
-                    {stations.map((station: any, index: number) => (
-                      <li key={index}>
-                        {station.line} - {station.station} ({station.walking_minutes} min walk)
+                  <ul className="m-0 flex list-none flex-col p-0 text-sm">
+                    {stations.map((station, index) => (
+                      <li key={index} className="flex flex-wrap justify-between gap-2 border-t border-base-300/60 py-2">
+                        <span>{station.line} · {station.station}</span>
+                        <span className="tabular-nums text-base-content/70">{station.walking_minutes} min walk</span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-base-content/60">No station information available</p>
+                  <p className="m-0 text-sm text-base-content/70">No station information available</p>
                 )}
               </div>
             </div>
-            
+
             {/* Tags */}
             {rentalUnit.tags && (
-              <div className="mt-4">
-                <h3 className="text-lg font-medium mb-2">Tags</h3>
-                <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-2">
+                <h3 className={`m-0 ${LABEL}`}>Tags</h3>
+                <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
                   {rentalUnit.tags.split(',').map((tag, index) => (
-                    <span key={index} className="px-2 py-1 bg-primary/10 text-primary rounded text-sm">
+                    <li key={index} className="rounded-field border border-base-300 px-3 py-1.5 text-sm font-medium">
                       {tag.trim()}
-                    </span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
             )}
-            
+
             {/* External Link */}
-            <div className="mt-6">
-              <a 
-                href={rentalUnit.url} 
-                target="_blank" 
+            <div>
+              <a
+                href={rentalUnit.url}
+                target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 inline-block"
+                className={BUTTON_SECONDARY}
               >
                 View on SUUMO
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7" /><path d="M8 7h9v9" /></svg>
               </a>
             </div>
-          </div>
-          
+          </section>
+
           {/* Price History */}
-          <div className="bg-base-100 rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">Price History</h2>
-            
+          <section aria-labelledby="history-h" className={`${PANEL} overflow-hidden`}>
+            <h2 id="history-h" className="m-0 border-b border-base-300 px-5 py-4 text-lg font-semibold">Price history</h2>
+
             {rentalUnit.rentalPriceHistory.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="min-w-full bg-base-100">
-                  <thead>
-                    <tr className="bg-base-200 text-base-content/70 uppercase text-sm leading-normal">
-                      <th className="py-3 px-6 text-left">Date</th>
-                      <th className="py-3 px-6 text-right">Rent</th>
-                      <th className="py-3 px-6 text-right">Management Fee</th>
+                <table className="w-full min-w-[420px] border-collapse text-sm">
+                  <thead className="bg-base-200/60">
+                    <tr className="text-left">
+                      <th scope="col" className={HEAD_CELL}>Date</th>
+                      <th scope="col" className={`${HEAD_CELL} text-right`}>Rent</th>
+                      <th scope="col" className={`${HEAD_CELL} text-right`}>Management fee</th>
                     </tr>
                   </thead>
-                  <tbody className="text-base-content/70 text-sm">
-                    {rentalUnit.rentalPriceHistory.map((history: any) => (
-                      <tr key={history.id} className="border-b border-base-300 hover:bg-base-200">
-                        <td className="py-3 px-6 text-left">{new Date(history.recorded_at).toLocaleDateString()}</td>
-                        <td className="py-3 px-6 text-right">{history.rent_text || `¥${history.rent.toLocaleString()}`}</td>
-                        <td className="py-3 px-6 text-right">{history.management_fee_text || `¥${history.management_fee.toLocaleString()}`}</td>
+                  <tbody>
+                    {rentalUnit.rentalPriceHistory.map((history) => (
+                      <tr key={history.id} className="border-t border-base-300/60 hover:bg-base-200/50">
+                        <td className="whitespace-nowrap px-4 py-3">{new Date(history.recorded_at).toLocaleDateString()}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums">{history.rent_text || `¥${history.rent.toLocaleString()}`}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-base-content/80">{history.management_fee_text || `¥${history.management_fee.toLocaleString()}`}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="text-base-content/60">No price history available</p>
+              <p className="m-0 px-5 py-4 text-sm text-base-content/70">No price history available</p>
             )}
-          </div>
+          </section>
         </div>
-        
+
         {/* Images */}
-        <div className="md:col-span-1">
-          <div className="bg-base-100 rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">Images</h2>
-            
-            <div className="space-y-4">
-              {rentalUnit.thumbnail_url && (
-                <div>
-                  <img 
-                    src={rentalUnit.thumbnail_url} 
-                    alt="Thumbnail" 
-                    className="w-full h-auto rounded"
-                  />
-                </div>
-              )}
-              
-              {imageUrls.length > 0 ? (
-                imageUrls.map((url, index) => (
-                  <div key={index}>
-                    <img 
-                      src={url.trim()} 
-                      alt={`Image ${index + 1}`} 
-                      className="w-full h-auto rounded"
-                    />
-                  </div>
-                ))
-              ) : (
-                !rentalUnit.thumbnail_url && (
-                  <p className="text-base-content/60">No images available</p>
-                )
-              )}
-            </div>
-          </div>
-        </div>
+        <section aria-labelledby="images-h" className={`${PANEL} flex min-w-0 flex-col gap-4 self-start p-6`}>
+          <h2 id="images-h" className="m-0 text-lg font-semibold">Images</h2>
+
+          {rentalUnit.thumbnail_url && (
+            <img src={rentalUnit.thumbnail_url} alt="Thumbnail" className="h-auto w-full rounded-field" />
+          )}
+
+          {imageUrls.length > 0 ? (
+            imageUrls.map((url, index) => (
+              <img key={index} src={url.trim()} alt={`Image ${index + 1}`} className="h-auto w-full rounded-field" />
+            ))
+          ) : (
+            !rentalUnit.thumbnail_url && (
+              <p className="m-0 text-sm text-base-content/70">No images available</p>
+            )
+          )}
+        </section>
       </div>
-    </div>
+    </>
   );
-} 
+}

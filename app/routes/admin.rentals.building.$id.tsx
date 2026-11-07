@@ -1,7 +1,9 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData, Link } from "@remix-run/react";
 import prisma from '../utils/db.server.js';
-import type { Building, RentalUnit } from "@prisma/client";
+import { Pagination } from "../components/Pagination.js";
+import { BUTTON_SECONDARY, LABEL, PageHeader, PANEL } from "../components/AdminUi.js";
+import { parseStations } from "../utils/stations.js";
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const buildingId = parseInt(params.id || "0");
@@ -49,137 +51,127 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   });
 }
 
+const HEAD_CELL = "whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-[0.05em] text-base-content/70";
+
 export default function BuildingDetails() {
   const { building, rentalUnits, pagination } = useLoaderData<typeof loader>();
 
   // Parse stations JSON
-  const stations = JSON.parse(building.stations || '[]');
+  const stations = parseStations(building.stations);
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Building Details</h1>
-        <Link 
-          to="/admin/rentals" 
-          className="px-3 py-1 bg-base-300 text-base-content rounded hover:bg-base-200"
-        >
-          Back to Buildings
-        </Link>
-      </div>
+    <>
+      <PageHeader
+        title={building.title || building.address}
+        description={`Building #${building.id}`}
+        actions={
+          <Link to="/admin/rentals" className={BUTTON_SECONDARY}>
+            Back to buildings
+          </Link>
+        }
+      />
 
       {/* Building Details */}
-      <div className="bg-base-100 rounded-lg shadow-md p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h2 className="text-xl font-semibold mb-4">{building.title || building.address}</h2>
-            
-            <div className="space-y-2">
-              <p><span className="font-medium">Address:</span> {building.address}</p>
-              <p><span className="font-medium">Type:</span> {building.building_type}</p>
-              <p><span className="font-medium">Age:</span> {building.age}</p>
-              <p><span className="font-medium">Floors:</span> {building.floors}</p>
-              <p><span className="font-medium">Location:</span> {building.state}, {building.city}{building.district ? `, ${building.district}` : ''}</p>
+      <section aria-labelledby="building-h" className={`${PANEL} grid gap-6 p-6 md:grid-cols-2`}>
+        <div className="flex min-w-0 flex-col gap-4">
+          <h2 id="building-h" className="sr-only">Building details</h2>
+          <dl className="m-0 grid grid-cols-2 gap-x-5 gap-y-3.5 text-sm">
+            <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Address</dt><dd className="m-0 font-medium">{building.address}</dd></div>
+            <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Type</dt><dd className="m-0 font-medium">{building.building_type}</dd></div>
+            <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Age</dt><dd className="m-0 font-medium">{building.age ?? "—"}</dd></div>
+            <div className="flex flex-col gap-0.5"><dt className="text-base-content/60">Floors</dt><dd className="m-0 font-medium">{building.floors ?? "—"}</dd></div>
+            <div className="col-span-2 flex flex-col gap-0.5">
+              <dt className="text-base-content/60">Location</dt>
+              <dd className="m-0 font-medium">{building.state}, {building.city}{building.district ? `, ${building.district}` : ''}</dd>
             </div>
-          </div>
-          
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Stations</h3>
+          </dl>
+
+          <div className="flex flex-col gap-2">
+            <h3 className={`m-0 ${LABEL}`}>Stations</h3>
             {stations.length > 0 ? (
-              <ul className="list-disc pl-5 space-y-1">
-                {stations.map((station: any, index: number) => (
-                  <li key={index}>
-                    {station.line} - {station.station} ({station.walking_minutes} min walk)
+              <ul className="m-0 flex list-none flex-col p-0 text-sm">
+                {stations.map((station, index) => (
+                  <li key={index} className="flex flex-wrap justify-between gap-2 border-t border-base-300/60 py-2">
+                    <span>{station.line} · {station.station}</span>
+                    <span className="tabular-nums text-base-content/70">{station.walking_minutes} min walk</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-base-content/60">No station information available</p>
-            )}
-            
-            {building.main_image_url && (
-              <div className="mt-4">
-                <img 
-                  src={building.main_image_url} 
-                  alt={building.title || building.address} 
-                  className="max-w-full h-auto rounded"
-                />
-              </div>
+              <p className="m-0 text-sm text-base-content/70">No station information available</p>
             )}
           </div>
         </div>
-      </div>
+
+        {building.main_image_url && (
+          <img
+            src={building.main_image_url}
+            alt={building.title || building.address}
+            className="h-auto w-full rounded-field object-cover"
+          />
+        )}
+      </section>
 
       {/* Rental Units */}
-      <div className="bg-base-100 rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold mb-4">Rental Units ({pagination.totalItems})</h2>
-        
+      <section aria-labelledby="units-h" className={`${PANEL} overflow-hidden`}>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-base-300 px-5 py-4">
+          <h2 id="units-h" className="m-0 text-lg font-semibold">
+            Rental units <span className="font-medium tabular-nums text-base-content/60">({pagination.totalItems})</span>
+          </h2>
+        </div>
+
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-base-100">
-            <thead>
-              <tr className="bg-base-200 text-base-content/70 uppercase text-sm leading-normal">
-                <th className="py-3 px-6 text-left">ID</th>
-                <th className="py-3 px-6 text-left">Floor</th>
-                <th className="py-3 px-6 text-left">Layout</th>
-                <th className="py-3 px-6 text-left">Size</th>
-                <th className="py-3 px-6 text-right">Rent</th>
-                <th className="py-3 px-6 text-right">Management Fee</th>
-                <th className="py-3 px-6 text-center">Last Updated</th>
-                <th className="py-3 px-6 text-center">Actions</th>
+          <table className="w-full min-w-[820px] border-collapse text-sm">
+            <thead className="bg-base-200/60">
+              <tr className="text-left">
+                <th scope="col" className={HEAD_CELL}>ID</th>
+                <th scope="col" className={HEAD_CELL}>Floor</th>
+                <th scope="col" className={HEAD_CELL}>Layout</th>
+                <th scope="col" className={HEAD_CELL}>Size</th>
+                <th scope="col" className={`${HEAD_CELL} text-right`}>Rent</th>
+                <th scope="col" className={`${HEAD_CELL} text-right`}>Management fee</th>
+                <th scope="col" className={HEAD_CELL}>Last updated</th>
+                <th scope="col" className={HEAD_CELL}><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
-            <tbody className="text-base-content/70 text-sm">
-              {rentalUnits.map((unit: any) => (
-                <tr key={unit.id} className="border-b border-base-300 hover:bg-base-200">
-                  <td className="py-3 px-6 text-left">{unit.id}</td>
-                  <td className="py-3 px-6 text-left">{unit.floor}</td>
-                  <td className="py-3 px-6 text-left">{unit.layout}</td>
-                  <td className="py-3 px-6 text-left">{unit.size_text || `${unit.size} m²`}</td>
-                  <td className="py-3 px-6 text-right">{unit.rent_text || `¥${unit.rent.toLocaleString()}`}</td>
-                  <td className="py-3 px-6 text-right">{unit.management_fee_text || `¥${unit.management_fee.toLocaleString()}`}</td>
-                  <td className="py-3 px-6 text-center">{new Date(unit.last_updated).toLocaleDateString()}</td>
-                  <td className="py-3 px-6 text-center">
-                    <Link 
+            <tbody>
+              {rentalUnits.map((unit) => (
+                <tr key={unit.id} className="border-t border-base-300/60 hover:bg-base-200/50">
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-[13px] text-base-content/70">{unit.id}</td>
+                  <td className="whitespace-nowrap px-4 py-3">{unit.floor}</td>
+                  <td className="whitespace-nowrap px-4 py-3 font-medium">{unit.layout}</td>
+                  <td className="whitespace-nowrap px-4 py-3">{unit.size_text || `${unit.size} m²`}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums">{unit.rent_text || `¥${unit.rent.toLocaleString()}`}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-base-content/80">{unit.management_fee_text || `¥${unit.management_fee.toLocaleString()}`}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-base-content/70">{new Date(unit.last_updated).toLocaleDateString()}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right">
+                    <Link
                       to={`/admin/rentals/unit/${unit.id}`}
-                      className="px-3 py-1 bg-primary text-white rounded hover:bg-primary/85 mr-2"
+                      className="inline-flex min-h-11 items-center px-2 font-semibold text-primary no-underline hover:underline"
                     >
                       Details
                     </Link>
                   </td>
                 </tr>
               ))}
+              {rentalUnits.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-6 text-center text-base-content/70">No rental units for this building</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination */}
-        {pagination.totalPages > 1 && (
-          <div className="flex justify-center mt-6">
-            <nav className="flex items-center">
-              {pagination.currentPage > 1 && (
-                <Link
-                  to={`/admin/rentals/building/${building.id}?page=${pagination.currentPage - 1}`}
-                  className="px-3 py-1 bg-base-300 text-base-content rounded-l hover:bg-base-200"
-                >
-                  Previous
-                </Link>
-              )}
-              
-              <span className="px-4 py-1 bg-base-200">
-                Page {pagination.currentPage} of {pagination.totalPages}
-              </span>
-              
-              {pagination.currentPage < pagination.totalPages && (
-                <Link
-                  to={`/admin/rentals/building/${building.id}?page=${pagination.currentPage + 1}`}
-                  className="px-3 py-1 bg-base-300 text-base-content rounded-r hover:bg-base-200"
-                >
-                  Next
-                </Link>
-              )}
-            </nav>
-          </div>
-        )}
-      </div>
-    </div>
+        <div className="border-t border-base-300 px-4 py-3">
+          <Pagination
+            currentPage={pagination.currentPage}
+            totalPages={pagination.totalPages}
+            summary={`Page ${pagination.currentPage} of ${pagination.totalPages}`}
+            pageHref={(p) => `/admin/rentals/building/${building.id}?page=${p}`}
+          />
+        </div>
+      </section>
+    </>
   );
-} 
+}
