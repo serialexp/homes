@@ -1,81 +1,74 @@
 import { json } from "@remix-run/node";
 import { Link } from "@remix-run/react";
+import { BUTTON_PRIMARY, BUTTON_SECONDARY, PageHeader, PANEL } from "../components/AdminUi.js";
 
 export async function loader() {
   return json({});
 }
 
+type CardLink = { to: string; label: string; primary?: boolean };
+
+function DashboardCard({
+  id,
+  title,
+  description,
+  links,
+}: {
+  id: string;
+  title: string;
+  description: string;
+  links: CardLink[];
+}) {
+  return (
+    <section aria-labelledby={id} className={`${PANEL} flex flex-col gap-3 p-6`}>
+      <h2 id={id} className="m-0 text-lg font-semibold">
+        {title}
+      </h2>
+      <p className="m-0 text-base-content/70">{description}</p>
+      <div className="mt-auto flex flex-wrap gap-2 pt-2">
+        {links.map((link) => (
+          <Link key={link.to} to={link.to} className={link.primary ? BUTTON_PRIMARY : BUTTON_SECONDARY}>
+            {link.label}
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function AdminIndex() {
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Property Data Retrieval Card */}
-        <div className="bg-base-100 p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">Property Data Retrieval</h2>
-          <p className="text-base-content/60 mb-4">
-            Retrieve property data from external sources and manage retrieval jobs.
-          </p>
-          <div className="flex flex-col space-y-2">
-            <Link 
-              to="/admin/retrieval" 
-              className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 text-center"
-            >
-              Retrieval Dashboard
-            </Link>
-            <Link 
-              to="/admin/retrieval/history" 
-              className="px-4 py-2 bg-base-300 text-base-content font-medium rounded-md hover:bg-base-200 text-center"
-            >
-              View Job History
-            </Link>
-          </div>
-        </div>
-        
-        {/* XPath Debug Card */}
-        <div className="bg-base-100 p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">XPath Debugger</h2>
-          <p className="text-base-content/60 mb-4">
-            Debug and test XPath expressions for web scraping.
-          </p>
-          <Link 
-            to="/admin/xpath-debug" 
-            className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 block text-center"
-          >
-            Open XPath Debugger
-          </Link>
-        </div>
-        
-        {/* Buildings & Rental Units Card */}
-        <div className="bg-base-100 p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">Buildings & Rental Units</h2>
-          <p className="text-base-content/60 mb-4">
-            Manage buildings and rental units in the database.
-          </p>
-          <Link
-            to="/admin/rentals"
-            className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 block text-center"
-          >
-            Manage Rentals
-          </Link>
-        </div>
-
-        {/* Train Line Reconciliation Card */}
-        <div className="bg-base-100 p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">Train Line Reconciliation</h2>
-          <p className="text-base-content/60 mb-4">
-            Classify transit lines, match railways to canonical lines, and clean
-            up bus routes.
-          </p>
-          <Link
-            to="/admin/reconcile"
-            className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 block text-center"
-          >
-            Open Reconciliation
-          </Link>
-        </div>
+    <>
+      <PageHeader title="Admin Dashboard" />
+      <div className="grid gap-4 md:grid-cols-2">
+        <DashboardCard
+          id="card-retrieval"
+          title="Property Data Retrieval"
+          description="Retrieve property data from external sources and manage retrieval jobs."
+          links={[
+            { to: "/admin/retrieval", label: "Retrieval Dashboard", primary: true },
+            { to: "/admin/retrieval/history", label: "View Job History" },
+          ]}
+        />
+        <DashboardCard
+          id="card-xpath"
+          title="XPath Debugger"
+          description="Debug and test XPath expressions for web scraping."
+          links={[{ to: "/admin/xpath-debug", label: "Open XPath Debugger", primary: true }]}
+        />
+        <DashboardCard
+          id="card-rentals"
+          title="Buildings & Rental Units"
+          description="Manage buildings and rental units in the database."
+          links={[{ to: "/admin/rentals", label: "Manage Rentals", primary: true }]}
+        />
+        <DashboardCard
+          id="card-reconcile"
+          title="Train Line Reconciliation"
+          description="Classify transit lines, match railways to canonical lines, and clean up bus routes."
+          links={[{ to: "/admin/reconcile", label: "Open Reconciliation", primary: true }]}
+        />
       </div>
-    </div>
+    </>
   );
-} 
+}
