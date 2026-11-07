@@ -205,7 +205,6 @@ model RetrievalJob {
     region          String?   @db.VarChar(100)
     province        String?   @db.VarChar(100)
     type            String?   @db.VarChar(100)
-    refresh         Boolean   @default(false)
     totalItems      Int       @default(0)
     processedItems  Int       @default(0)
     totalPages      Int       @default(0)

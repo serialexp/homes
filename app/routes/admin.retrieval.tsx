@@ -62,10 +62,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const type = formData.get("type") as string;
   const region = formData.get("region") as string;
   const province = formData.get("province") as string;
-  const refresh = formData.get("refresh") === "on";
 
   try {
-    const options: Record<string, any> = { refresh };
+    const options: Record<string, any> = {};
     
     if (type && type !== "all") {
       options.type = type;
@@ -343,17 +342,6 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
             </div>
           </div>
 
-          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-field border border-base-300 p-4 text-sm font-medium has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
-            <input
-              type="checkbox"
-              id="refresh"
-              name="refresh"
-              className="size-4 shrink-0 accent-primary"
-              disabled={isSubmitting || isActive}
-            />
-            Refresh (clear existing pages)
-          </label>
-          
           <div>
             <button
               type="submit"

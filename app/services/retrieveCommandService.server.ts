@@ -32,7 +32,6 @@ async function executeRetrieval(options: {
   region?: string;
   province?: string;
   type?: string;
-  refresh?: boolean;
 }, processId: string) {
   try {
     // A fresh command per run: its listeners and cancel flag are per-run state
@@ -55,7 +54,7 @@ async function executeRetrieval(options: {
     let currentPhase: 'calculation' | 'retrieval' = 'calculation';
 
     // Wrap the run to track progress and record its outcome
-    const runJob = async (input: { region?: string; province?: string; type?: string; refresh?: boolean }) => {
+    const runJob = async (input: { region?: string; province?: string; type?: string }) => {
       try {
         // Update status before starting
         await storeRetrievalStatus({
@@ -301,8 +300,7 @@ export async function runRetrievalJob(job: RetrievalJob) {
     await executeRetrieval({
       region: job.region ?? undefined,
       province: job.province ?? undefined,
-      type: job.type ?? undefined,
-      refresh: job.refresh
+      type: job.type ?? undefined
     }, job.processId);
   } catch (error) {
     // A user cancel is an expected outcome, already recorded in Redis and the job row

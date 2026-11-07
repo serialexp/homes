@@ -104,7 +104,7 @@ export async function startRetrievalWorker() {
   cron.schedule("30 10 * * *", async () => {
     console.log("Running scheduled data retrieval...");
     try {
-      await enqueueRetrieval({ refresh: true });
+      await enqueueRetrieval({});
       console.log("Data retrieval queued successfully");
     } catch (error) {
       console.error("Error queueing scheduled data retrieval:", error);

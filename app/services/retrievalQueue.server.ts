@@ -12,7 +12,6 @@ export async function enqueueRetrieval(options: {
   region?: string;
   province?: string;
   type?: string;
-  refresh?: boolean;
 }) {
   const processId = uuidv4();
 
@@ -21,8 +20,7 @@ export async function enqueueRetrieval(options: {
       processId,
       region: options.region,
       province: options.province,
-      type: options.type,
-      refresh: options.refresh || false
+      type: options.type
     });
   } catch (error) {
     // The active_slot unique index rejects a second active job

@@ -38,7 +38,6 @@ type SerializedRetrievalJob = {
   region: string | null;
   province: string | null;
   type: string | null;
-  refresh: boolean;
   totalItems: number;
   processedItems: number;
   totalPages: number;
@@ -122,7 +121,6 @@ function scopeLabels(job: SerializedRetrievalJob): string[] {
   if (job.type) labels.push(propertyTypes[job.type] ?? job.type);
   if (job.region) labels.push(areas[job.region]?.name ?? job.region);
   if (job.region && job.province) labels.push(areas[job.region]?.provinces[job.province] ?? job.province);
-  if (job.refresh) labels.push("Refresh");
   return labels;
 }
 

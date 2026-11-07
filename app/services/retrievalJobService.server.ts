@@ -11,7 +11,6 @@ export async function enqueueRetrievalJob(data: {
   region?: string;
   province?: string;
   type?: string;
-  refresh: boolean;
 }) {
   return prisma.retrievalJob.create({
     data: {
@@ -20,8 +19,7 @@ export async function enqueueRetrievalJob(data: {
       activeSlot: 'active',
       region: data.region || null,
       province: data.province || null,
-      type: data.type || null,
-      refresh: data.refresh
+      type: data.type || null
     }
   });
 }

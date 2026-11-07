@@ -29,7 +29,6 @@ interface InputInterface {
   region?: string
   province?: string
   type?: string
-  refresh?: boolean
 }
 
 interface ExistingProperty {
