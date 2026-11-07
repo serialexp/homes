@@ -1,6 +1,8 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import prisma from "../utils/db.server.js";
+import { Pagination } from "../components/Pagination.js";
+import { PANEL, PageHeader } from "../components/AdminUi.js";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -40,85 +42,75 @@ export default function XPathDebugPage() {
   const { pages, pagination } = useLoaderData<typeof loader>();
 
   return (
-    <div className="container mx-auto p-4">
-      <h2 className="text-2xl font-bold mb-6">XPath Debugging</h2>
-      
-      <div className="bg-base-100 p-6 rounded-lg shadow mb-6">
-        <h3 className="text-xl font-semibold mb-4">Recently Retrieved Pages</h3>
-        
+    <>
+      <PageHeader
+        title="XPath debug"
+        description="Cached Suumo pages, newest first. Open one to test XPath queries and parsers against its HTML."
+      />
+
+      <section aria-label="Cached pages" className={`${PANEL} overflow-hidden`}>
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-base-100">
-            <thead>
-              <tr className="bg-base-200 border-b">
-                <th className="py-2 px-4 text-left">ID</th>
-                <th className="py-2 px-4 text-left">URL</th>
-                <th className="py-2 px-4 text-left">Kind</th>
-                <th className="py-2 px-4 text-left">Actions</th>
+          <table className="w-full min-w-[640px] border-collapse text-sm tabular-nums">
+            <thead className="bg-base-200/60 text-left text-xs font-semibold uppercase tracking-[0.05em] text-base-content/70">
+              <tr>
+                <th scope="col" className="px-4 py-3">ID</th>
+                <th scope="col" className="px-4 py-3">URL</th>
+                <th scope="col" className="px-4 py-3">Kind</th>
+                <th scope="col" className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pages.map((page) => (
-                <tr key={page.id} className="border-b hover:bg-base-200">
-                  <td className="py-2 px-4">{page.id}</td>
-                  <td className="py-2 px-4">
-                    <Link to={page.url} title={page.url} target="_blank">
-                      <div className="truncate max-w-md" title={page.url}>
-                        {page.url}
-                      </div>
-                    </Link>
+                <tr key={page.id} className="border-t border-base-300/60 align-middle hover:bg-base-200/50">
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-[13px] font-medium">#{page.id}</td>
+                  <td className="max-w-[420px] px-4 py-3">
+                    {/* External Suumo URL: a plain anchor, not a router Link. */}
+                    <a
+                      href={page.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={page.url}
+                      className="block truncate font-mono text-[13px] text-primary hover:underline"
+                    >
+                      {page.url}
+                    </a>
                   </td>
-                  <td className="py-2 px-4">{page.kind}</td>
-                  <td className="py-2 px-4">
-                    <Link 
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <span className="rounded-md bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/80">{page.kind}</span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <Link
                       to={`/admin/xpath-debug/${page.id}`}
-                      
-                      className="text-primary hover:text-base-content underline"
+                      className="inline-flex min-h-11 items-center px-2 font-semibold text-primary no-underline hover:underline"
                     >
                       Debug
                     </Link>
                   </td>
                 </tr>
               ))}
-              
+
               {pages.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-4 px-4 text-center text-base-content/60">
-                    No pages found
+                  <td colSpan={4} className="px-4 py-6 text-center text-base-content/70">
+                    No cached pages found
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-        
-        {/* Pagination */}
+
         {pagination.totalPages > 1 && (
-          <div className="flex justify-between items-center mt-4">
-            <div>
-              Showing page {pagination.currentPage} of {pagination.totalPages}
-            </div>
-            <div className="flex space-x-2">
-              {pagination.currentPage > 1 && (
-                <Link
-                  to={`/admin/xpath-debug?page=${pagination.currentPage - 1}`}
-                  className="px-3 py-1 bg-base-300 rounded hover:bg-base-200"
-                >
-                  Previous
-                </Link>
-              )}
-              
-              {pagination.currentPage < pagination.totalPages && (
-                <Link
-                  to={`/admin/xpath-debug?page=${pagination.currentPage + 1}`}
-                  className="px-3 py-1 bg-base-300 rounded hover:bg-base-200"
-                >
-                  Next
-                </Link>
-              )}
-            </div>
+          <div className="border-t border-base-300 px-4 py-3">
+            <Pagination
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              summary={`Page ${pagination.currentPage} of ${pagination.totalPages}`}
+              pageHref={(p) => `?page=${p}`}
+            />
           </div>
         )}
-      </div>
-    </div>
+      </section>
+    </>
   );
-} 
+}
