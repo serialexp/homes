@@ -10,16 +10,16 @@ export async function getRedisClient() {
   if (!redisClient) {
     const url = process.env.REDIS_URL || 'redis://localhost:6379';
     redisClient = createClient({ url });
-    
+
     // Handle connection errors
     redisClient.on('error', (err) => {
       console.error('Redis connection error:', err);
     });
-    
+
     // Connect to Redis
     await redisClient.connect();
   }
-  
+
   return redisClient;
 }
 
@@ -28,7 +28,7 @@ export async function getRedisClient() {
  */
 export async function setRedisValue(key: string, value: string, expirationSeconds?: number) {
   const client = await getRedisClient();
-  
+
   if (expirationSeconds) {
     await client.setEx(key, expirationSeconds, value);
   } else {
@@ -69,39 +69,107 @@ export async function getAllRedisHash(key: string): Promise<Record<string, strin
   return client.hGetAll(key);
 }
 
+const RETRIEVAL_STATUS_KEY = 'retrieval:status';
+
+/** Every state a retrieval can report. 'unknown' is what a status hash without a readable state reads as. */
+export const RETRIEVAL_STATUSES = ['unknown', 'idle', 'queued', 'running', 'completed', 'failed', 'cancelled'] as const;
+
+/**
+ * Retrieval status interface
+ */
+export interface RetrievalStatus {
+  status: (typeof RETRIEVAL_STATUSES)[number];
+  message: string;
+  progress: number;
+  total: number;
+  sectionsToFetch: number;
+  sectionsProcessed: number;
+  startTime: Date;
+  endTime?: Date;
+  error?: string;
+  processId?: string;
+  estimatedCompletionTime?: Date;
+  processingStartTime?: Date; // When actual processing started (after initial setup)
+}
+
+/**
+ * The hash fields that describe a status. Unset optional fields are left out, so they read back as unset.
+ */
+export function retrievalStatusFields(status: RetrievalStatus): Record<string, string> {
+  const fields: Record<string, string> = {
+    status: status.status,
+    message: status.message,
+    progress: status.progress.toString(),
+    total: status.total.toString(),
+    sectionsToFetch: status.sectionsToFetch.toString(),
+    sectionsProcessed: status.sectionsProcessed.toString(),
+    startTime: status.startTime.toISOString(),
+    error: status.error || '',
+  };
+
+  if (status.endTime) fields.endTime = status.endTime.toISOString();
+  if (status.estimatedCompletionTime) fields.estimatedCompletionTime = status.estimatedCompletionTime.toISOString();
+  if (status.processingStartTime) fields.processingStartTime = status.processingStartTime.toISOString();
+  if (status.processId) fields.processId = status.processId;
+
+  return fields;
+}
+
+/**
+ * Read a status hash. Returns null when there is no hash at all. A hash whose status is missing or
+ * not a known name reads as 'unknown', so a partial or foreign value never breaks the readers.
+ */
+export function parseRetrievalStatus(data: Record<string, string>): RetrievalStatus | null {
+  if (Object.keys(data).length === 0) {
+    return null;
+  }
+
+  const state = (RETRIEVAL_STATUSES as readonly string[]).includes(data.status)
+    ? (data.status as RetrievalStatus['status'])
+    : 'unknown';
+
+  const status: RetrievalStatus = {
+    status: state,
+    message: data.message ?? '',
+    progress: parseInt(data.progress || '0', 10),
+    total: parseInt(data.total || '0', 10),
+    sectionsToFetch: parseInt(data.sectionsToFetch || '0', 10),
+    sectionsProcessed: parseInt(data.sectionsProcessed || '0', 10),
+    startTime: new Date(data.startTime),
+    processId: data.processId,
+  };
+
+  if (data.endTime) {
+    status.endTime = new Date(data.endTime);
+  }
+
+  if (data.error) {
+    status.error = data.error;
+  }
+
+  if (data.estimatedCompletionTime) {
+    status.estimatedCompletionTime = new Date(data.estimatedCompletionTime);
+  }
+
+  if (data.processingStartTime) {
+    status.processingStartTime = new Date(data.processingStartTime);
+  }
+
+  return status;
+}
+
 /**
  * Store retrieval command status in Redis
  */
 export async function storeRetrievalStatus(status: RetrievalStatus) {
-  const key = 'retrieval:status';
-  // Clear all previous fields before writing new status
   const client = await getRedisClient();
-  await client.del(key);
-  await setRedisHash(key, 'status', status.status);
-  await setRedisHash(key, 'message', status.message);
-  await setRedisHash(key, 'progress', status.progress.toString());
-  await setRedisHash(key, 'total', status.total.toString());
-  await setRedisHash(key, 'sectionsToFetch', status.sectionsToFetch.toString());
-  await setRedisHash(key, 'sectionsProcessed', status.sectionsProcessed.toString());
-  await setRedisHash(key, 'startTime', status.startTime.toISOString());
-  
-  if (status.endTime) {
-    await setRedisHash(key, 'endTime', status.endTime.toISOString());
-  }
-  
-  if (status.estimatedCompletionTime) {
-    await setRedisHash(key, 'estimatedCompletionTime', status.estimatedCompletionTime.toISOString());
-  }
-  
-  if (status.processingStartTime) {
-    await setRedisHash(key, 'processingStartTime', status.processingStartTime.toISOString());
-  }
-  
-  await setRedisHash(key, 'error', status.error || '');
-  
-  if (status.processId) {
-    await setRedisHash(key, 'processId', status.processId);
-  }
+  // One MULTI: the previous fields are dropped and the new ones land together,
+  // so no reader can see a half-written status.
+  await client
+    .multi()
+    .del(RETRIEVAL_STATUS_KEY)
+    .hSet(RETRIEVAL_STATUS_KEY, retrievalStatusFields(status))
+    .exec();
 
   await publishRetrievalStatus();
 }
@@ -110,41 +178,7 @@ export async function storeRetrievalStatus(status: RetrievalStatus) {
  * Get retrieval command status from Redis
  */
 export async function getRetrievalStatus(): Promise<RetrievalStatus | null> {
-  const key = 'retrieval:status';
-  const data = await getAllRedisHash(key);
-  
-  if (!data || Object.keys(data).length === 0) {
-    return null;
-  }
-  
-  const status: RetrievalStatus = {
-    status: data.status as RetrievalStatus['status'],
-    message: data.message,
-    progress: parseInt(data.progress || '0', 10),
-    total: parseInt(data.total || '0', 10),
-    sectionsToFetch: parseInt(data.sectionsToFetch || '0', 10),
-    sectionsProcessed: parseInt(data.sectionsProcessed || '0', 10),
-    startTime: new Date(data.startTime),
-    processId: data.processId
-  };
-  
-  if (data.endTime) {
-    status.endTime = new Date(data.endTime);
-  }
-  
-  if (data.error) {
-    status.error = data.error;
-  }
-  
-  if (data.estimatedCompletionTime) {
-    status.estimatedCompletionTime = new Date(data.estimatedCompletionTime);
-  }
-  
-  if (data.processingStartTime) {
-    status.processingStartTime = new Date(data.processingStartTime);
-  }
-  
-  return status;
+  return parseRetrievalStatus(await getAllRedisHash(RETRIEVAL_STATUS_KEY));
 }
 
 /**
@@ -154,12 +188,12 @@ export async function isRetrievalCancelled(processId: string): Promise<boolean> 
   // Check the dedicated cancellation key first
   const cancellationKey = 'retrieval:cancellation';
   const cancelledProcessId = await getRedisValue(cancellationKey);
-  
+
   // If there's a cancellation signal and it matches the current process ID, or it's '*' (cancel all)
   if (cancelledProcessId && (cancelledProcessId === processId || cancelledProcessId === '*')) {
     return true;
   }
-  
+
   // Fallback to checking the status (for backward compatibility)
   const status = await getRetrievalStatus();
   return !status || status.processId !== processId || status.status === 'cancelled';
@@ -170,11 +204,11 @@ export async function isRetrievalCancelled(processId: string): Promise<boolean> 
  */
 export async function cancelRetrievalProcess(): Promise<boolean> {
   const status = await getRetrievalStatus();
-  
+
   if (!status || (status.status !== 'running' && status.status !== 'queued')) {
     return false;
   }
-  
+
   // Set the cancellation signal with the process ID
   const cancellationKey = 'retrieval:cancellation';
   if (status.processId) {
@@ -183,7 +217,7 @@ export async function cancelRetrievalProcess(): Promise<boolean> {
     // If no process ID, use a wildcard to cancel any running process
     await setRedisValue(cancellationKey, '*', 3600);
   }
-  
+
   // Also update the status (for UI and backward compatibility)
   await storeRetrievalStatus({
     ...status,
@@ -191,7 +225,7 @@ export async function cancelRetrievalProcess(): Promise<boolean> {
     message: 'Retrieval process cancelled by user',
     endTime: new Date()
   });
-  
+
   return true;
 }
 
@@ -212,34 +246,15 @@ export async function clearRedisValue(key: string) {
 }
 
 /**
- * Retrieval status interface
- */
-export interface RetrievalStatus {
-  status: 'idle' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-  message: string;
-  progress: number;
-  total: number;
-  sectionsToFetch: number;
-  sectionsProcessed: number;
-  startTime: Date;
-  endTime?: Date;
-  error?: string;
-  processId?: string;
-  estimatedCompletionTime?: Date;
-  processingStartTime?: Date; // When actual processing started (after initial setup)
-}
-
-/**
  * Update specific fields of the retrieval status without overwriting the entire object
  * This is more efficient than updating the entire status object
  */
 export async function updateRetrievalStatusField(fields: Partial<RetrievalStatus>) {
   const client = await getRedisClient();
-  const key = 'retrieval:status';
-  
+
   // Use multi to batch Redis operations
   const multi = client.multi();
-  
+
   // Only update the fields that are provided
   for (const [fieldName, value] of Object.entries(fields)) {
     if (value !== undefined) {
@@ -252,11 +267,11 @@ export async function updateRetrievalStatusField(fields: Partial<RetrievalStatus
       } else {
         stringValue = value as string;
       }
-      
-      multi.hSet(key, fieldName, stringValue);
+
+      multi.hSet(RETRIEVAL_STATUS_KEY, fieldName, stringValue);
     }
   }
-  
+
   // Execute all commands in a single round trip
   await multi.exec();
 
@@ -294,4 +309,4 @@ export async function subscribeRetrievalStatus(onStatus: (status: RetrievalStatu
   return async () => {
     await subscriber.quit();
   };
-} 
+}

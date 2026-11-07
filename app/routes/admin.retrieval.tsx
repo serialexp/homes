@@ -97,8 +97,8 @@ export default function RetrievalPage() {
   const submit = useSubmit();
   
   const [selectedRegion, setSelectedRegion] = useState<string>("all");
-  // A status hash can hold only some fields (a partial update with no state); treat that as no status.
-  const [currentStatus, setCurrentStatus] = useState(status?.status ? status : null);
+  // Null only when no status has ever been stored; a status the server cannot read arrives as 'unknown'.
+  const [currentStatus, setCurrentStatus] = useState(status);
   const isActive = currentStatus?.status === 'running' || currentStatus?.status === 'queued';
   
   // Follow progress as the worker publishes it, instead of polling
@@ -106,7 +106,7 @@ export default function RetrievalPage() {
     const events = new EventSource("/admin/retrieval/events");
     events.onmessage = event => {
       const next = JSON.parse(event.data);
-      setCurrentStatus(next?.status ? next : null);
+      setCurrentStatus(next ?? null);
     };
     return () => events.close();
   }, []);
@@ -159,9 +159,11 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
                   <h2 id="now-h" className="m-0 text-lg font-semibold">Current status</h2>
                   <StatusPill status={currentStatus.status} />
                 </div>
-                <span className="text-sm text-base-content/70">
-                  Started {new Date(currentStatus.startTime).toLocaleString()}
-                </span>
+                {currentStatus.startTime && (
+                  <span className="text-sm text-base-content/70">
+                    Started {new Date(currentStatus.startTime).toLocaleString()}
+                  </span>
+                )}
               </div>
               {currentStatus.status === 'running' && (
                 <div className="flex flex-col items-end">
