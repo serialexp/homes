@@ -3,6 +3,7 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 import { areas, propertyTypes } from "../data/propertyData.js";
 import prisma from "../utils/db.server.js";
+import { man, sqm, yen } from "../utils/format.js";
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const id = Number(params.id);
@@ -21,10 +22,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
   return json({ property });
 }
 
-const yen = (n: number) =>
-  new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY", maximumFractionDigits: 0 }).format(n);
-const man = (n: number) => `${Math.round(n / 10000).toLocaleString("ja-JP")}万円`;
-const sqm = (n: number) => `${n.toLocaleString("en-US", { maximumFractionDigits: 1 })} m²`;
 const shortDate = (value: string | Date) =>
   new Date(value).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 

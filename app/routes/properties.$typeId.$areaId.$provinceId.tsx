@@ -1,567 +1,305 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData, useSearchParams } from "@remix-run/react";
-import type { Property } from "@prisma/client";
-import { propertyTypes, areas } from "../data/propertyData.js";
+import { Form, Link, useLoaderData, useSearchParams } from "@remix-run/react";
+import type { Prisma } from "@prisma/client";
+import { areas, propertyTypes } from "../data/propertyData.js";
+import { floorAreaOf, man, photoCount, shortYen, sqm, yen } from "../utils/format.js";
+import {
+  LISTINGS_PER_PAGE,
+  hasActiveFilters,
+  listingOrderBy,
+  listingWhere,
+  parseListingFilters,
+} from "../utils/listingFilters.js";
 import prisma from "../utils/db.server.js";
-import { useState, useEffect } from "react";
 import { translateAndUpdateProperties } from "../utils/translation.server.js";
 
-// Map property type IDs to property_type values in the database
-const propertyTypeMapping = {
-  '030': 'Land',
-  '021': 'Second-hand house',
-  '020': 'New house',
-  '011': 'Second-hand mansion',
-  '010': 'New mansion'
-};
-
-const ITEMS_PER_PAGE = 12;
+type ListingRow = Prisma.PropertyGetPayload<{ include: { priceHistory: true } }>;
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const { typeId, areaId, provinceId } = params;
   const url = new URL(request.url);
-  const page = parseInt(url.searchParams.get("page") || "1", 10);
-  const skip = (page - 1) * ITEMS_PER_PAGE;
-  
-  if (!typeId || !propertyTypes[typeId as keyof typeof propertyTypes]) {
+  const requestedPage = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const filters = parseListingFilters(url.searchParams);
+
+  if (!typeId || !propertyTypes[typeId]) {
     throw new Response("Invalid property type", { status: 404 });
   }
-  
-  if (!areaId || !areas[areaId as keyof typeof areas]) {
+  if (!areaId || !areas[areaId]) {
     throw new Response("Invalid area", { status: 404 });
   }
-  
-  const area = areas[areaId as keyof typeof areas];
-  if (!provinceId || !area.provinces[provinceId as keyof typeof area.provinces]) {
+  const area = areas[areaId];
+  if (!provinceId || !area.provinces[provinceId]) {
     throw new Response("Invalid province", { status: 404 });
   }
 
-  const propertyType = propertyTypeMapping[typeId as keyof typeof propertyTypeMapping];
-  const provinceName = area.provinces[provinceId as keyof typeof area.provinces];
-  const regionName = area.name;
-  
-  // Query the database for properties matching the criteria
-  const countTotal = await prisma.property.count({
-    where: {
-      section_type: typeId,
-      region: areaId,
-      province: provinceId
-    }
-  });
-  
-  const properties = await prisma.property.findMany({
-    where: {
-      section_type: typeId,
-      region: areaId,
-      province: provinceId
-    },
-    orderBy: {
-      price: 'asc'
-    },
-    skip,
-    take: ITEMS_PER_PAGE
-  });
+  const where = listingWhere({ section_type: typeId, region: areaId, province: provinceId }, filters);
 
-  // Translate property names and titles if needed
+  const [countTotal, properties] = await Promise.all([
+    prisma.property.count({ where }),
+    prisma.property.findMany({
+      where,
+      orderBy: listingOrderBy(filters),
+      skip: (page - 1) * LISTINGS_PER_PAGE,
+      take: LISTINGS_PER_PAGE,
+      // The two most recent price points, for the price-cut badge.
+      include: { priceHistory: { orderBy: { recorded_at: "desc" }, take: 2 } },
+    }),
+  ]);
+
   const translatedProperties = await translateAndUpdateProperties(properties);
 
   return json({
     properties: translatedProperties,
     countTotal,
     currentPage: page,
-    totalPages: Math.ceil(countTotal / ITEMS_PER_PAGE),
-    selectedType: {
-      id: typeId,
-      name: propertyTypes[typeId as keyof typeof propertyTypes]
-    },
-    selectedArea: {
-      id: areaId,
-      name: regionName
-    },
-    selectedProvince: {
-      id: provinceId,
-      name: provinceName
-    }
+    totalPages: Math.ceil(countTotal / LISTINGS_PER_PAGE),
+    filters,
+    selectedType: { id: typeId, name: propertyTypes[typeId] },
+    selectedArea: { id: areaId, name: area.name },
+    selectedProvince: { id: provinceId, name: area.provinces[provinceId] },
   });
 }
 
-export default function PropertiesPage() {
-  const { properties, selectedType, selectedArea, selectedProvince, countTotal, currentPage, totalPages } = useLoaderData<typeof loader>();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedProperty, setSelectedProperty] = useState<(Property & { 
-    translated_property_name?: string | null;
-    translated_title?: string | null;
-  }) | null>(null);
-  const [additionalImages, setAdditionalImages] = useState<string[]>([]);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  
-  // Format price in Japanese yen (¥)
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('ja-JP', {
-      style: 'currency',
-      currency: 'JPY',
-      maximumFractionDigits: 0
-    }).format(price);
-  };
-  
-  // Format area in square meters (m²)
-  const formatArea = (area: number) => {
-    return `${area.toLocaleString()} m²`;
-  };
+const SORT_OPTIONS = [
+  { value: "price_asc", label: "Price: low to high" },
+  { value: "price_desc", label: "Price: high to low" },
+];
+const PRICE_OPTIONS = [
+  { value: "any", label: "Any price" },
+  { value: "under30", label: "Under ¥30M" },
+  { value: "30to60", label: "¥30M – ¥60M" },
+  { value: "60to100", label: "¥60M – ¥100M" },
+  { value: "over100", label: "Over ¥100M" },
+];
+const SIZE_OPTIONS = [
+  { value: "any", label: "Any size" },
+  { value: "40", label: "40 m² +" },
+  { value: "60", label: "60 m² +" },
+  { value: "80", label: "80 m² +" },
+];
+const WALK_OPTIONS = [
+  { value: "any", label: "Any" },
+  { value: "5", label: "5 min or less" },
+  { value: "10", label: "10 min or less" },
+  { value: "15", label: "15 min or less" },
+];
 
-  // Handle pagination
-  const handlePageChange = (newPage: number) => {
-    searchParams.set("page", newPage.toString());
-    setSearchParams(searchParams);
-  };
+const PAGER_BASE = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-field px-3.5 text-sm no-underline";
+const PAGER_IDLE = `${PAGER_BASE} border border-base-300 bg-base-100 font-medium text-base-content hover:bg-base-200`;
+const PAGER_CURRENT = `${PAGER_BASE} border border-neutral bg-neutral font-semibold text-neutral-content`;
+const PAGER_DISABLED = `${PAGER_BASE} border border-base-300 bg-base-100 text-base-content/40`;
 
-  // Open property details modal
-  const openPropertyDetails = (property: Property & { 
-    translated_property_name?: string | null;
-    translated_title?: string | null;
-  }) => {
-    setSelectedProperty(property);
-    setCurrentImageIndex(0);
-    
-    // Parse additional images if available
-    if (property.additional_image_urls) {
-      try {
-        const images = property.additional_image_urls.split(',').map((url: string) => url.trim());
-        setAdditionalImages(images);
-      } catch (error) {
-        setAdditionalImages([]);
-      }
-    } else {
-      setAdditionalImages([]);
-    }
-  };
+const PAGE_WINDOW = 5;
 
-  // Close property details modal
-  const closePropertyDetails = () => {
-    setSelectedProperty(null);
-    setAdditionalImages([]);
-  };
-  
-  // Navigate to next image
-  const nextImage = () => {
-    const totalImages = additionalImages.length + 1; // +1 for main image
-    setCurrentImageIndex((currentImageIndex + 1) % totalImages);
-  };
-  
-  // Navigate to previous image
-  const prevImage = () => {
-    const totalImages = additionalImages.length + 1; // +1 for main image
-    setCurrentImageIndex((currentImageIndex - 1 + totalImages) % totalImages);
-  };
-  
-  // Parse and optimize image URL
-  const optimizeImageUrl = (url: string | null | undefined, width: number, height: number): string => {
-    if (!url) return 'https://placehold.co/600x400';
-    
-    try {
-      // Check if it's a URL that supports width and height parameters
-      const parsedUrl = new URL(url);
-      
-      // If the URL contains query parameters for width and height, update them
-      if (parsedUrl.searchParams.has('w') || parsedUrl.searchParams.has('h')) {
-        parsedUrl.searchParams.set('w', width.toString());
-        parsedUrl.searchParams.set('h', height.toString());
-        return parsedUrl.toString();
-      }
-      
-      // If it's an image hosting service that uses path parameters for dimensions
-      // Example: some-cdn.com/600x400/image.jpg
-      const pathParts = parsedUrl.pathname.split('/');
-      for (let i = 0; i < pathParts.length; i++) {
-        if (pathParts[i].match(/^\d+x\d+$/)) {
-          pathParts[i] = `${width}x${height}`;
-          parsedUrl.pathname = pathParts.join('/');
-          return parsedUrl.toString();
-        }
-      }
-      
-      return url;
-    } catch (error) {
-      // If URL parsing fails, return the original URL
-      return url;
-    }
-  };
-  
-  // Get current image URL with optimized dimensions
-  const getCurrentImageUrl = () => {
-    if (currentImageIndex === 0) {
-      return optimizeImageUrl(selectedProperty?.main_image_url, 800, 600);
-    } else {
-      return optimizeImageUrl(additionalImages[currentImageIndex - 1], 800, 600);
-    }
-  };
+interface FilterOption {
+  value: string;
+  label: string;
+}
 
-  // Display property name with translation if available
-  const getPropertyName = (property: Property & { translated_property_name?: string | null }) => {
-    if (property.translated_property_name) {
-      return (
-        <div>
-          <div>{property.property_name}</div>
-          <div className="text-base-content/60 italic text-sm">{property.translated_property_name}</div>
-        </div>
-      );
-    }
-    return property.property_name;
-  };
+function FilterSelect({ name, label, value, options }: { name: string; label: string; value: string; options: FilterOption[] }) {
+  return (
+    <div className="flex min-w-[160px] flex-1 flex-col gap-1.5">
+      <label htmlFor={name} className="text-[13px] font-semibold text-base-content/80">
+        {label}
+      </label>
+      <select id={name} name={name} defaultValue={value} key={value} className="select min-h-11 w-full">
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
-  // Display property title with translation if available
-  const getPropertyTitle = (property: Property & { translated_title?: string | null }) => {
-    if (property.translated_title) {
-      return (
-        <div>
-          <div>{property.title}</div>
-          <div className="text-base-content/60 italic text-sm">{property.translated_title}</div>
-        </div>
-      );
-    }
-    return property.title;
-  };
+function ListingCard({ property }: { property: ListingRow }) {
+  const title = property.translated_property_name || property.property_name || property.address;
+  const floorArea = floorAreaOf(property);
+  const photos = photoCount(property);
+  const latest = property.priceHistory[0];
+  const previous = property.priceHistory[1];
+  const cut = latest && previous && latest.price < previous.price ? previous.price - latest.price : 0;
+  const detailHref = `/property/${property.id}`;
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="mb-6">
-        <Link to={`/areas/${selectedType.id}`} className="text-primary hover:underline">
-          ← Back to Areas
-        </Link>
-        <h2 className="text-2xl font-bold mt-2">
-          {selectedType.name} Properties in {selectedProvince.name}, {selectedArea.name}
-        </h2>
-        <p className="text-base-content/70 mt-1">Found {countTotal} properties</p>
+    <article className="flex flex-col overflow-hidden rounded-box border border-base-300 bg-base-100">
+      <Link to={detailHref} tabIndex={-1} className="relative flex h-48 items-center justify-center bg-base-300 text-base-content/50 no-underline">
+        {property.main_image_url ? (
+          <img src={property.main_image_url} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />
+        ) : (
+          <span>No photo</span>
+        )}
+        {cut > 0 && (
+          <span className="absolute left-2.5 top-2.5 rounded-md bg-error px-2 py-1 text-xs font-semibold text-error-content">
+            ↓ {shortYen(cut)} cut
+          </span>
+        )}
+        {photos > 0 && (
+          <span className="absolute bottom-2.5 right-2.5 rounded-md bg-neutral/80 px-2 py-0.5 text-xs font-medium text-neutral-content">
+            {photos} {photos === 1 ? "photo" : "photos"}
+          </span>
+        )}
+      </Link>
+
+      <div className="flex flex-1 flex-col gap-3 px-[18px] pb-[18px] pt-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-display text-2xl font-bold tracking-[-0.02em] tabular-nums">{yen(property.price)}</span>
+          <span className="font-jp text-[13px] text-base-content/60 tabular-nums">{man(property.price)}</span>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <Link to={detailHref} className="truncate font-semibold text-base-content no-underline hover:text-primary">
+            {title}
+          </Link>
+          <span className="truncate font-jp text-[13px] text-base-content/60">{property.address}</span>
+        </div>
+
+        <dl className="m-0 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+          <div className="flex flex-col">
+            <dt className="text-xs text-base-content/60">Floor area</dt>
+            <dd className="m-0 font-medium tabular-nums">{floorArea > 0 ? sqm(floorArea) : "—"}</dd>
+          </div>
+          <div className="flex flex-col">
+            <dt className="text-xs text-base-content/60">Per m²</dt>
+            <dd className="m-0 font-medium tabular-nums">{floorArea > 0 ? yen(Math.round(property.price / floorArea)) : "—"}</dd>
+          </div>
+        </dl>
+
+        <div className="mt-auto flex min-w-0 items-center gap-2 border-t border-base-300/60 pt-3 text-sm">
+          <span className="min-w-0 truncate">
+            <strong className="font-semibold">{property.train_station}</strong> · {property.train_line}
+          </span>
+          {property.walking_minutes ? (
+            <span className="ml-auto shrink-0 text-base-content/70 tabular-nums">{property.walking_minutes} min walk</span>
+          ) : null}
+        </div>
       </div>
-      
-      {properties.length === 0 ? (
-        <div className="bg-warning/10 border border-warning/30 p-4 rounded-lg">
-          <p>No properties found matching these criteria.</p>
+    </article>
+  );
+}
+
+export default function PropertiesPage() {
+  const { properties, countTotal, currentPage, totalPages, filters, selectedType, selectedArea, selectedProvince } =
+    useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const filtersActive = hasActiveFilters(filters);
+
+  // Keep the current filters when moving between pages.
+  const pageHref = (target: number) => {
+    const next = new URLSearchParams(searchParams);
+    if (target <= 1) {
+      next.delete("page");
+    } else {
+      next.set("page", String(target));
+    }
+    const query = next.toString();
+    return query ? `?${query}` : "?";
+  };
+
+  const firstShown = (currentPage - 1) * LISTINGS_PER_PAGE + 1;
+  const lastShown = Math.min(currentPage * LISTINGS_PER_PAGE, countTotal);
+
+  const windowStart = Math.max(1, Math.min(currentPage - 2, totalPages - PAGE_WINDOW + 1));
+  const windowEnd = Math.min(totalPages, windowStart + PAGE_WINDOW - 1);
+  const pages = Array.from({ length: windowEnd - windowStart + 1 }, (_, i) => windowStart + i);
+
+  return (
+    <div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-4 pb-4 pt-8 sm:px-8">
+      <nav aria-label="Breadcrumb" className="flex flex-wrap gap-2 text-sm text-base-content/60">
+        <Link to="/" className="text-base-content/60 hover:text-base-content">Home</Link>
+        <span aria-hidden="true">/</span>
+        <Link to={`/areas/${selectedType.id}`} className="text-base-content/60 hover:text-base-content">{selectedType.name}</Link>
+        <span aria-hidden="true">/</span>
+        <span>{selectedArea.name}</span>
+        <span aria-hidden="true">/</span>
+        <span className="text-base-content">{selectedProvince.name}</span>
+      </nav>
+
+      <div className="flex flex-col gap-2.5">
+        <h1 className="m-0 font-display text-[clamp(30px,4vw,42px)] leading-[1.1] tracking-[-0.025em]">
+          {selectedType.name} in {selectedProvince.name}
+        </h1>
+        <p className="m-0 text-base-content/80">
+          <strong className="font-semibold text-base-content tabular-nums">{countTotal.toLocaleString("en-US")}</strong> listings
+        </p>
+      </div>
+
+      <Form method="get" className="flex flex-wrap items-end gap-3 rounded-box border border-base-300 bg-base-100 p-4">
+        <FilterSelect name="sort" label="Sort by" value={filters.sort} options={SORT_OPTIONS} />
+        <FilterSelect name="price" label="Price" value={filters.price} options={PRICE_OPTIONS} />
+        <FilterSelect name="size" label="Floor area" value={filters.size} options={SIZE_OPTIONS} />
+        <FilterSelect name="walk" label="Walk to station" value={filters.walk} options={WALK_OPTIONS} />
+        <button type="submit" className="btn btn-primary min-h-11 px-5.5">
+          Apply
+        </button>
+      </Form>
+
+      {countTotal === 0 ? (
+        <div className="flex flex-col gap-2 rounded-box border border-base-300 bg-base-100 p-6">
+          <p className="m-0">{filtersActive ? "No listings match these filters." : "No listings in this area yet."}</p>
+          {filtersActive && (
+            <Link to="." className="font-medium text-primary">
+              Clear filters
+            </Link>
+          )}
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {properties.map((property) => (
-              <div key={property.id} className="bg-base-100 border border-base-300 rounded-lg shadow overflow-hidden">
-                <div className="p-5">
-                  <h3 className="text-xl font-semibold mb-2 truncate">{property.address}</h3>
-                  <img 
-                    src={optimizeImageUrl(property.main_image_url, 400, 300)} 
-                    alt={property.property_name ?? 'Property image'} 
-                    className="w-full h-40 object-cover mb-2" 
-                  />
-                  <div className="flex justify-between mb-2">
-                    <span className="text-2xl font-bold text-green-700">{formatPrice(property.price)}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm mb-4">
-                    <div>
-                      <span className="text-base-content/70">Area:</span> {formatArea(property.area)}
-                    </div>
-                    {property.building_area > 0 && (
-                      <div>
-                        <span className="text-base-content/70">Building:</span> {formatArea(property.building_area)}
-                      </div>
-                    )}
-                    <div>
-                      <span className="text-base-content/70">Station:</span> {property.train_station}
-                    </div>
-                    <div>
-                      <span className="text-base-content/70">Distance:</span> {property.station_distance} min walk
-                    </div>
-                    {property.property_name && (
-                      <div className="col-span-2 mt-2">
-                        <span className="text-base-content/70">Name:</span> {getPropertyName(property)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button 
-                      onClick={() => openPropertyDetails(property)}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded"
-                    >
-                      Details
-                    </button>
-                    <a 
-                      href={property.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="block text-center bg-primary hover:bg-primary/85 text-white font-medium py-2 px-4 rounded"
-                    >
-                      Website
-                    </a>
-                  </div>
-                </div>
-              </div>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(270px,100%),1fr))] gap-5">
+            {properties.map((property: ListingRow) => (
+              <ListingCard key={property.id} property={property} />
             ))}
           </div>
 
-          {/* Pagination controls */}
-          <div className="mt-8 flex justify-center">
-            <nav className="flex items-center">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage <= 1}
-                className={`mx-1 px-3 py-1 rounded ${
-                  currentPage <= 1 
-                    ? 'bg-base-300 text-base-content/60 cursor-not-allowed' 
-                    : 'bg-primary text-white hover:bg-primary/85'
-                }`}
-              >
-                Previous
-              </button>
-              
-              <div className="flex mx-2">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  // Show pages around current page
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
-                  }
-                  
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => handlePageChange(pageNum)}
-                      className={`mx-1 px-3 py-1 rounded ${
-                        currentPage === pageNum
-                          ? 'bg-primary text-white'
-                          : 'bg-primary/10 text-primary hover:bg-primary/20'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-                
-                {totalPages > 5 && currentPage < totalPages - 2 && (
+          {totalPages > 1 && (
+            <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-4">
+              <span className="text-sm text-base-content/70">
+                Showing {firstShown}–{lastShown} of {countTotal.toLocaleString("en-US")}
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {currentPage > 1 ? (
+                  <Link to={pageHref(currentPage - 1)} className={PAGER_IDLE}>Previous</Link>
+                ) : (
+                  <span aria-disabled="true" className={PAGER_DISABLED}>Previous</span>
+                )}
+
+                {windowStart > 1 && (
                   <>
-                    <span className="mx-1">...</span>
-                    <button
-                      onClick={() => handlePageChange(totalPages)}
-                      className="mx-1 px-3 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20"
-                    >
-                      {totalPages}
-                    </button>
+                    <Link to={pageHref(1)} className={PAGER_IDLE}>1</Link>
+                    {windowStart > 2 && <span aria-hidden="true" className="px-1 text-base-content/60">…</span>}
                   </>
                 )}
-              </div>
-              
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage >= totalPages}
-                className={`mx-1 px-3 py-1 rounded ${
-                  currentPage >= totalPages
-                    ? 'bg-base-300 text-base-content/60 cursor-not-allowed'
-                    : 'bg-primary text-white hover:bg-primary/85'
-                }`}
-              >
-                Next
-              </button>
-            </nav>
-          </div>
-        </>
-      )}
 
-      {/* Property Details Modal */}
-      {selectedProperty && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-base-100 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-start mb-4">
-                <h2 className="text-2xl font-bold">{selectedProperty.address}</h2>
-                <button 
-                  onClick={closePropertyDetails}
-                  className="text-base-content/60 hover:text-base-content/70"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  {/* Image gallery */}
-                  <div className="relative mb-4">
-                    <img 
-                      src={getCurrentImageUrl()} 
-                      alt={selectedProperty.property_name ?? 'Property image'} 
-                      className="w-full h-64 object-cover rounded-lg" 
-                    />
-                    
-                    {/* Image navigation buttons */}
-                    {(additionalImages.length > 0) && (
-                      <div className="absolute inset-0 flex items-center justify-between px-2">
-                        <button 
-                          onClick={prevImage}
-                          className="bg-black bg-opacity-50 text-white rounded-full p-2 hover:bg-opacity-70 focus:outline-none"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                          </svg>
-                        </button>
-                        <button 
-                          onClick={nextImage}
-                          className="bg-black bg-opacity-50 text-white rounded-full p-2 hover:bg-opacity-70 focus:outline-none"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      </div>
-                    )}
-                    
-                    {/* Image counter */}
-                    {(additionalImages.length > 0) && (
-                      <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
-                        {currentImageIndex + 1} / {additionalImages.length + 1}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Thumbnail navigation */}
-                  {additionalImages.length > 0 && (
-                    <div className="flex overflow-x-auto space-x-2 mb-4 pb-2">
-                      <button 
-                        onClick={() => setCurrentImageIndex(0)}
-                        className={`flex-shrink-0 w-16 h-16 rounded ${currentImageIndex === 0 ? 'ring-2 ring-primary' : ''}`}
-                      >
-                        <img 
-                          src={optimizeImageUrl(selectedProperty.main_image_url, 100, 100)} 
-                          alt="Main" 
-                          className="w-full h-full object-cover rounded" 
-                        />
-                      </button>
-                      {additionalImages.map((url, index) => (
-                        <button 
-                          key={index}
-                          onClick={() => setCurrentImageIndex(index + 1)}
-                          className={`flex-shrink-0 w-16 h-16 rounded ${currentImageIndex === index + 1 ? 'ring-2 ring-primary' : ''}`}
-                        >
-                          <img 
-                            src={optimizeImageUrl(url, 100, 100)} 
-                            alt={`Image ${index + 1}`} 
-                            className="w-full h-full object-cover rounded" 
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  
-                  <div className="text-3xl font-bold text-green-700 mb-4">
-                    {formatPrice(selectedProperty.price)}
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-y-2 mb-4">
-                    <div className="col-span-2">
-                      <span className="font-semibold">Address:</span> {selectedProperty.address}
-                    </div>
-                    <div>
-                      <span className="font-semibold">Land Area:</span> {formatArea(selectedProperty.area)}
-                    </div>
-                    {selectedProperty.building_area > 0 && (
-                      <div>
-                        <span className="font-semibold">Building Area:</span> {formatArea(selectedProperty.building_area)}
-                      </div>
-                    )}
-                    <div>
-                      <span className="font-semibold">Train Line:</span> {selectedProperty.train_line}
-                    </div>
-                    <div>
-                      <span className="font-semibold">Station:</span> {selectedProperty.train_station}
-                    </div>
-                    <div>
-                      <span className="font-semibold">Distance:</span> {selectedProperty.station_distance} min walk
-                    </div>
-                    {selectedProperty.property_name && (
-                      <div className="col-span-2">
-                        <span className="font-semibold">Property Name:</span> {getPropertyName(selectedProperty)}
-                      </div>
-                    )}
-                    {selectedProperty.title && (
-                      <div className="col-span-2">
-                        <span className="font-semibold">Title:</span> {getPropertyTitle(selectedProperty)}
-                      </div>
-                    )}
-                    <div>
-                      <span className="font-semibold">Property Type:</span> {selectedProperty.property_type}
-                    </div>
-                    {selectedProperty.building_coverage !== null && selectedProperty.building_coverage > 0 && (
-                      <div>
-                        <span className="font-semibold">Building Coverage:</span> {selectedProperty.building_coverage}%
-                      </div>
-                    )}
-                    {selectedProperty.floor_area_ratio !== null && selectedProperty.floor_area_ratio > 0 && (
-                      <div>
-                        <span className="font-semibold">Floor Area Ratio:</span> {selectedProperty.floor_area_ratio}%
-                      </div>
-                    )}
-                    {selectedProperty.coverage > 0 && (
-                      <div>
-                        <span className="font-semibold">Coverage:</span> {selectedProperty.coverage}%
-                      </div>
-                    )}
-                    {selectedProperty.volume > 0 && (
-                      <div>
-                        <span className="font-semibold">Volume:</span> {selectedProperty.volume}%
-                      </div>
-                    )}
-                    {selectedProperty.postal_code && (
-                      <div>
-                        <span className="font-semibold">Postal Code:</span> {selectedProperty.postal_code}
-                      </div>
-                    )}
-                    <div className="col-span-2">
-                      <span className="font-semibold">Last Updated:</span> {new Date(selectedProperty.last_updated).toLocaleDateString()}
-                    </div>
-                  </div>
-                  
-                  <a 
-                    href={selectedProperty.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="block w-full text-center bg-primary hover:bg-primary/85 text-white font-medium py-2 px-4 rounded"
+                {pages.map((page) => (
+                  <Link
+                    key={page}
+                    to={pageHref(page)}
+                    aria-current={page === currentPage ? "page" : undefined}
+                    className={page === currentPage ? PAGER_CURRENT : PAGER_IDLE}
                   >
-                    View on Website
-                  </a>
-                </div>
-                
-                <div>
-                  {selectedProperty.additional_fields && (
-                    <div className="mb-4">
-                      <h3 className="text-lg font-semibold mb-2">Additional Information</h3>
-                      <div className="bg-base-200 p-4 rounded-lg">
-                        <pre className="whitespace-pre-wrap text-sm">
-                          {selectedProperty.additional_fields}
-                        </pre>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {selectedProperty.property_tags && (
-                    <div className="mb-4">
-                      <h3 className="text-lg font-semibold mb-2">Property Tags</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedProperty.property_tags.split(',').map((tag: string, index: number) => (
-                          <span key={index} className="bg-primary/10 text-primary text-xs px-2 py-1 rounded">
-                            {tag.trim()}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    {page}
+                  </Link>
+                ))}
+
+                {windowEnd < totalPages && (
+                  <>
+                    {windowEnd < totalPages - 1 && <span aria-hidden="true" className="px-1 text-base-content/60">…</span>}
+                    <Link to={pageHref(totalPages)} className={PAGER_IDLE}>{totalPages}</Link>
+                  </>
+                )}
+
+                {currentPage < totalPages ? (
+                  <Link to={pageHref(currentPage + 1)} className={PAGER_IDLE}>Next</Link>
+                ) : (
+                  <span aria-disabled="true" className={PAGER_DISABLED}>Next</span>
+                )}
               </div>
-            </div>
-          </div>
-        </div>
+            </nav>
+          )}
+        </>
       )}
     </div>
   );
-} 
+}
