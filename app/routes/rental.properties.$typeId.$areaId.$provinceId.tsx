@@ -1,175 +1,142 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData, useSearchParams } from "@remix-run/react";
-import prisma from '../utils/db.server.js';
+import { Link, useLoaderData, useNavigate, useSearchParams } from "@remix-run/react";
+import { Prisma, type TrainLine } from "@prisma/client";
+import type { ReactNode } from "react";
+import prisma from "../utils/db.server.js";
 import { areas } from "../data/propertyData.js";
 import { translateWithCache } from "../utils/llm.server.js";
-import { type Building, type RentalUnit, type TrainLine, type Station, type BuildingStation, Prisma } from "@prisma/client";
-import { useState } from "react";
+import { sqm, yen } from "../utils/format.js";
+import { Pagination } from "../components/Pagination.js";
 
 // For rentals, we only have one type (040)
-const RENTAL_TYPE_ID = '040';
-const RENTAL_TYPE_NAME = 'Rental';
+const RENTAL_TYPE_ID = "040";
+const RENTAL_TYPE_NAME = "Rental";
+
+const ITEMS_PER_PAGE = 10;
+const UNITS_PER_BUILDING = 20;
 
 /** Display label for a train line: canonical match wins, then AI romaji, then raw. */
 function lineLabel(line: Pick<TrainLine, "canonical_name" | "translated_name" | "name">): string {
   return line.canonical_name || line.translated_name || line.name;
 }
 
-const ITEMS_PER_PAGE = 10;
-
-// Price ranges in JPY
+// Monthly rent bands in yen. min 0 is no lower bound; max null is open-ended.
 const PRICE_RANGES = [
   { min: 0, max: 50000, label: "Under ¥50,000" },
-  { min: 50000, max: 75000, label: "¥50,000 - ¥75,000" },
-  { min: 75000, max: 100000, label: "¥75,000 - ¥100,000" },
-  { min: 100000, max: 150000, label: "¥100,000 - ¥150,000" },
-  { min: 150000, max: 200000, label: "¥150,000 - ¥200,000" },
-  { min: 200000, max: 300000, label: "¥200,000 - ¥300,000" },
-  { min: 300000, max: null, label: "Over ¥300,000" }
+  { min: 50000, max: 75000, label: "¥50,000 – ¥75,000" },
+  { min: 75000, max: 100000, label: "¥75,000 – ¥100,000" },
+  { min: 100000, max: 150000, label: "¥100,000 – ¥150,000" },
+  { min: 150000, max: 200000, label: "¥150,000 – ¥200,000" },
+  { min: 200000, max: 300000, label: "¥200,000 – ¥300,000" },
+  { min: 300000, max: null, label: "Over ¥300,000" },
 ];
 
-type LoaderBuilding = Building & {
-  buildingStations: (BuildingStation & {
-    station: Station & {
-      train_line: TrainLine
-    }
-  })[];
-  rentalUnits: RentalUnit[];
-};
+/** A whole number from the query string, or null when absent or not a number. */
+function wholeNumber(raw: string | null): number | null {
+  if (raw === null || raw.trim() === "") return null;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const { typeId, areaId, provinceId } = params;
   const url = new URL(request.url);
-  const page = parseInt(url.searchParams.get("page") || "1", 10);
-  const trainLineId = url.searchParams.get("trainLine");
-  const stationId = url.searchParams.get("station");
-  const minPrice = url.searchParams.get("minPrice") ? parseInt(url.searchParams.get("minPrice")!, 10) : null;
-  const maxPrice = url.searchParams.get("maxPrice") ? parseInt(url.searchParams.get("maxPrice")!, 10) : null;
-  const skip = (page - 1) * ITEMS_PER_PAGE;
-  
+  const requestedPage = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const trainLineId = wholeNumber(url.searchParams.get("trainLine")) || null;
+  const stationId = wholeNumber(url.searchParams.get("station")) || null;
+  const minPrice = wholeNumber(url.searchParams.get("minPrice"));
+  const maxPrice = wholeNumber(url.searchParams.get("maxPrice"));
+
   if (typeId !== RENTAL_TYPE_ID) {
     throw new Response("Invalid property type", { status: 404 });
   }
-  
-  if (!areaId || !areas[areaId as keyof typeof areas]) {
+  if (!areaId || !areas[areaId]) {
     throw new Response("Invalid area", { status: 404 });
   }
-  
-  const area = areas[areaId as keyof typeof areas];
-  if (!provinceId || !area.provinces[provinceId as keyof typeof area.provinces]) {
+  const area = areas[areaId];
+  if (!provinceId || !area.provinces[provinceId]) {
     throw new Response("Invalid province", { status: 404 });
   }
 
-  const provinceName = area.provinces[provinceId as keyof typeof area.provinces];
-  const regionName = area.name;
+  const scope = { region: areaId, province: provinceId };
+  const buildingWhere: Prisma.BuildingWhereInput = {
+    ...scope,
+    ...(stationId
+      ? { buildingStations: { some: { station_id: stationId } } }
+      : trainLineId
+        ? { buildingStations: { some: { station: { train_line_id: trainLineId } } } }
+        : {}),
+  };
+  const unitRentWhere: Prisma.RentalUnitWhereInput = {
+    AND: [
+      ...(minPrice ? [{ rent: { gte: minPrice } }] : []),
+      ...(maxPrice ? [{ rent: { lte: maxPrice } }] : []),
+    ],
+  };
 
-  // Get all train lines that have stations near buildings in this area
-  const trainLines = await prisma.trainLine.findMany({
-    where: {
-      stations: {
-        some: {
-          buildingStations: {
-            some: {
-              building: {
-                region: areaId,
-                province: provinceId
-              }
-            }
-          }
-        }
-      }
-    },
-    orderBy: {
-      translated_name: 'asc'
-    }
-  });
-
-  // Get stations for the selected train line
-  const stations = trainLineId ? await prisma.station.findMany({
-    where: {
-      train_line_id: parseInt(trainLineId, 10),
-      buildingStations: {
-        some: {
-          building: {
-            region: areaId,
-            province: provinceId
-          }
-        }
-      }
-    },
-    orderBy: {
-      name: 'asc'
-    }
-  }) : [];
-
-  // Base query for buildings
-  const buildingQuery = {
-    where: {
-      region: areaId,
-      province: provinceId,
-      ...(stationId ? {
-        buildingStations: {
-          some: {
-            station_id: parseInt(stationId, 10)
-          }
-        }
-      } : trainLineId ? {
-        buildingStations: {
-          some: {
-            station: {
-              train_line_id: parseInt(trainLineId, 10)
-            }
-          }
-        }
-      } : {}),
-      rentalUnits: {
-        some: {
-          AND: [
-            ...(minPrice ? [{ rent: { gte: minPrice } }] : []),
-            ...(maxPrice ? [{ rent: { lte: maxPrice } }] : [])
-          ]
-        }
-      }
-    },
-    include: {
-      buildingStations: {
+  const [trainLineRows, lineCountRows, stationRows, totalBuildingsInArea, buildings, countTotal, unitCount] =
+    await Promise.all([
+      // Lines that run past a building in this area.
+      prisma.trainLine.findMany({
+        where: { stations: { some: { buildingStations: { some: { building: scope } } } } },
+        orderBy: { translated_name: "asc" },
+      }),
+      // Buildings per line in this area, in one grouped query.
+      prisma.$queryRaw<Array<{ train_line_id: number; buildings: bigint }>>`
+        SELECT s.train_line_id, COUNT(DISTINCT bs.building_id) AS buildings
+        FROM building_station bs
+        JOIN station s ON s.id = bs.station_id
+        JOIN building b ON b.id = bs.building_id
+        WHERE b.region = ${areaId} AND b.province = ${provinceId}
+        GROUP BY s.train_line_id
+      `,
+      trainLineId
+        ? prisma.station.findMany({
+            where: { train_line_id: trainLineId, buildingStations: { some: { building: scope } } },
+            orderBy: { name: "asc" },
+          })
+        : Promise.resolve([]),
+      prisma.building.count({ where: scope }),
+      prisma.building.findMany({
+        where: { ...buildingWhere, rentalUnits: { some: unitRentWhere } },
         include: {
-          station: {
-            include: {
-              train_line: true
-            }
-          }
-        }
-      },
-      rentalUnits: {
-        orderBy: {
-          rent: Prisma.SortOrder.asc
+          buildingStations: { include: { station: { include: { train_line: true } } } },
+          rentalUnits: { where: unitRentWhere, orderBy: { rent: "asc" }, take: UNITS_PER_BUILDING },
         },
-        where: {
-          AND: [
-            ...(minPrice ? [{ rent: { gte: minPrice } }] : []),
-            ...(maxPrice ? [{ rent: { lte: maxPrice } }] : [])
-          ]
-        },
-        take: 20 // Limit to 20 units per building
-      }
-    },
-    orderBy: {
-      last_updated: 'desc' as const
-    },
-    skip,
-    take: ITEMS_PER_PAGE
-  } satisfies Prisma.BuildingFindManyArgs;
+        orderBy: { last_updated: "desc" },
+        skip: (page - 1) * ITEMS_PER_PAGE,
+        take: ITEMS_PER_PAGE,
+      }),
+      prisma.building.count({ where: { ...buildingWhere, rentalUnits: { some: unitRentWhere } } }),
+      prisma.rentalUnit.count({ where: { ...unitRentWhere, building: buildingWhere } }),
+    ]);
 
-  // Get buildings with their rental units
-  const buildings = await prisma.building.findMany(buildingQuery);
+  const lineCounts = new Map(lineCountRows.map((row) => [row.train_line_id, Number(row.buildings)]));
+  const trainLines = trainLineRows.map((line) => ({
+    id: line.id,
+    label: lineLabel(line),
+    bus: line.kind === "bus",
+    buildingCount: lineCounts.get(line.id) ?? 0,
+  }));
+  const selectedTrainLine = trainLines.find((line) => line.id === trainLineId) ?? null;
 
-  // Get total count for pagination
-  const totalBuildings = await prisma.building.count({
-    where: buildingQuery.where
-  });
+  const stations = stationRows.map((station) => ({
+    id: station.id,
+    label: station.translated_name || station.name,
+  }));
+  const selectedStation = stations.find((station) => station.id === stationId) ?? null;
 
-  // Collect all unique Japanese strings that need translation
+  // "any", the index of a preset band, or "custom" for bounds the presets do not cover.
+  const priceChoice =
+    minPrice === null && maxPrice === null
+      ? "any"
+      : (() => {
+          const index = PRICE_RANGES.findIndex((range) => range.min === (minPrice ?? 0) && range.max === (maxPrice ?? null));
+          return index >= 0 ? String(index) : "custom";
+        })();
+
+  // Collect the unique Japanese strings shown on the building cards and translate them.
   const textsToTranslate: string[] = [];
   for (const building of buildings) {
     if (building.building_type) textsToTranslate.push(building.building_type);
@@ -193,27 +160,40 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     translations: Object.fromEntries(translations),
     trainLines,
     stations,
+    selectedTrainLine,
+    selectedStation,
     priceRanges: PRICE_RANGES,
-    selectedTrainLine: trainLineId ? trainLines.find(line => line.id === parseInt(trainLineId, 10)) : null,
-    selectedStation: stationId ? stations.find(station => station.id === parseInt(stationId, 10)) : null,
-    selectedPriceRange: minPrice || maxPrice ? { min: minPrice, max: maxPrice } : null,
-    countTotal: totalBuildings,
+    priceChoice,
+    allBuildingCount: totalBuildingsInArea,
+    countTotal,
+    unitCount,
     currentPage: page,
-    totalPages: Math.ceil(totalBuildings / ITEMS_PER_PAGE),
+    totalPages: Math.ceil(countTotal / ITEMS_PER_PAGE),
     selectedType: {
-      id: typeId,
-      name: RENTAL_TYPE_NAME
+      id: RENTAL_TYPE_ID,
+      name: RENTAL_TYPE_NAME,
     },
     selectedArea: {
       id: areaId,
-      name: regionName
+      name: area.name,
     },
     selectedProvince: {
       id: provinceId,
-      name: provinceName
-    }
+      name: area.provinces[provinceId],
+    },
   });
 }
+
+function FilterGroup({ legend, children }: { legend: string; children: ReactNode }) {
+  return (
+    <fieldset className="m-0 flex min-w-0 flex-col gap-1 border-0 p-0">
+      <legend className="mb-2 p-0 text-xs font-bold uppercase tracking-[0.06em] text-base-content/70">{legend}</legend>
+      {children}
+    </fieldset>
+  );
+}
+
+const FILTER_ROW = "flex min-h-10 cursor-pointer items-center gap-2.5 rounded-field px-2.5";
 
 export default function RentalPropertiesPage() {
   const {
@@ -221,19 +201,21 @@ export default function RentalPropertiesPage() {
     translations,
     trainLines,
     stations,
-    priceRanges,
     selectedTrainLine,
     selectedStation,
-    selectedPriceRange,
+    priceRanges,
+    priceChoice,
+    allBuildingCount,
+    countTotal,
+    unitCount,
+    currentPage,
+    totalPages,
     selectedType,
     selectedArea,
     selectedProvince,
-    countTotal,
-    currentPage,
-    totalPages 
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   // Look up a cached translation, falling back to the original text
   const t = (text: string | null | undefined) => {
@@ -241,63 +223,22 @@ export default function RentalPropertiesPage() {
     return translations[text] || text;
   };
 
-  // Format price in Japanese yen (¥)
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('ja-JP', {
-      style: 'currency',
-      currency: 'JPY',
-      maximumFractionDigits: 0
-    }).format(price);
-  };
-
-  // Handle pagination
-  const handlePageChange = (newPage: number) => {
-    searchParams.set("page", newPage.toString());
-    setSearchParams(searchParams);
-  };
-
-  // Handle train line filter
-  const handleTrainLineChange = (trainLineId: string | null) => {
-    if (trainLineId) {
-      searchParams.set("trainLine", trainLineId);
-    } else {
-      searchParams.delete("trainLine");
+  // The current URL with some filters changed. Any filter change goes back to page 1.
+  const hrefWith = (changes: Record<string, string | null>, keepPage = false) => {
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === null || value === "") next.delete(key);
+      else next.set(key, value);
     }
-    searchParams.delete("station"); // Clear station when train line changes
-    searchParams.set("page", "1"); // Reset to first page when filter changes
-    setSearchParams(searchParams);
+    if (!keepPage) next.delete("page");
+    const query = next.toString();
+    return query ? `?${query}` : "?";
   };
+  const applyFilters = (changes: Record<string, string | null>) => navigate(hrefWith(changes));
 
-  // Handle station filter
-  const handleStationChange = (stationId: string | null) => {
-    if (stationId) {
-      searchParams.set("station", stationId);
-    } else {
-      searchParams.delete("station");
-    }
-    searchParams.set("page", "1"); // Reset to first page when filter changes
-    setSearchParams(searchParams);
-  };
-
-  // Handle price range filter
-  const handlePriceRangeChange = (range: { min: number | null, max: number | null } | null) => {
-    if (range) {
-      if (range.min) searchParams.set("minPrice", range.min.toString());
-      else searchParams.delete("minPrice");
-      if (range.max) searchParams.set("maxPrice", range.max.toString());
-      else searchParams.delete("maxPrice");
-    } else {
-      searchParams.delete("minPrice");
-      searchParams.delete("maxPrice");
-    }
-    searchParams.set("page", "1"); // Reset to first page when filter changes
-    setSearchParams(searchParams);
-  };
-
-  // Format relative time from a date string
   const formatAge = (dateStr: string) => {
     const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
-    if (days === 0) return "Today";
+    if (days === 0) return "today";
     if (days === 1) return "1 day ago";
     if (days < 7) return `${days} days ago`;
     if (days < 14) return "1 week ago";
@@ -306,379 +247,293 @@ export default function RentalPropertiesPage() {
     return `${Math.floor(days / 30)} months ago`;
   };
 
-  // Close image modal
-  const closeImageModal = () => {
-    setSelectedImage(null);
-  };
+  const priceChoices = [
+    { value: "any", label: "Any rent", minPrice: null, maxPrice: null },
+    ...priceRanges.map((range, index) => ({
+      value: String(index),
+      label: range.label,
+      minPrice: range.min > 0 ? String(range.min) : null,
+      maxPrice: range.max === null ? null : String(range.max),
+    })),
+  ];
+  const activePriceLabel =
+    priceChoice === "any" ? null : priceChoice === "custom" ? "Custom rent" : priceRanges[Number(priceChoice)].label;
+
+  const hasFilters = Boolean(selectedTrainLine || selectedStation || activePriceLabel);
+  const firstShown = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const lastShown = Math.min(currentPage * ITEMS_PER_PAGE, countTotal);
 
   return (
-    <div className="container mx-auto p-4">
-      {/* Image Modal */}
-      {selectedImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75" onClick={closeImageModal}>
-          <div className="relative max-w-4xl max-h-[90vh] p-2 bg-base-100 rounded-lg" onClick={e => e.stopPropagation()}>
-            <button 
-              onClick={closeImageModal}
-              className="absolute top-2 right-2 text-base-content/60 hover:text-base-content/70"
-              aria-label="Close modal"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <img 
-              src={selectedImage} 
-              alt="Full size view" 
-              className="max-h-[85vh] w-auto mx-auto"
-            />
-          </div>
-        </div>
-      )}
+    <div className="mx-auto flex max-w-[1280px] flex-col gap-7 px-4 pb-4 pt-8 sm:px-8">
+      <nav aria-label="Breadcrumb" className="flex flex-wrap gap-2 text-sm text-base-content/60">
+        <Link to="/" className="text-base-content/60 hover:text-base-content">Home</Link>
+        <span aria-hidden="true">/</span>
+        <Link to={`/rental/areas/${selectedType.id}`} className="text-base-content/60 hover:text-base-content">Rent</Link>
+        <span aria-hidden="true">/</span>
+        <span>{selectedArea.name}</span>
+        <span aria-hidden="true">/</span>
+        <span className="text-base-content">{selectedProvince.name}</span>
+      </nav>
 
-      <div className="mb-6">
-        <Link to={`/rental/areas/${selectedType.id}`} className="text-primary hover:underline">
-          ← Back to Areas
-        </Link>
-        <h2 className="text-2xl font-bold mt-2">
-          {selectedType.name} Properties in {selectedProvince.name}, {selectedArea.name}
-        </h2>
-        <p className="text-base-content/70 mt-1">Found {countTotal} buildings</p>
+      <div className="flex flex-col gap-2.5">
+        <h1 className="m-0 font-display text-[clamp(30px,4vw,42px)] leading-[1.1] tracking-[-0.025em]">
+          {selectedTrainLine ? `Rentals along the ${selectedTrainLine.label}` : `Rentals in ${selectedProvince.name}`}
+        </h1>
+        <p className="m-0 text-base-content/80">
+          <strong className="font-semibold text-base-content tabular-nums">{countTotal.toLocaleString("en-US")}</strong> buildings ·{" "}
+          <strong className="font-semibold text-base-content tabular-nums">{unitCount.toLocaleString("en-US")}</strong> units available
+        </p>
       </div>
 
-      {/* Filters */}
-      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Train Line Filter */}
-        <div className="form-control w-full">
-          <label className="label">
-            <span className="label-text">Filter by Train Line</span>
-          </label>
-          <select 
-            className="select select-bordered w-full"
-            value={selectedTrainLine?.id || ""}
-            onChange={(e) => handleTrainLineChange(e.target.value || null)}
-          >
-            <option value="">All Lines</option>
-            {(() => {
-              const sorted = [...trainLines].sort((a, b) =>
-                lineLabel(a).localeCompare(lineLabel(b))
-              );
-              const rail = sorted.filter((l) => l.kind !== "bus");
-              const bus = sorted.filter((l) => l.kind === "bus");
-              return (
-                <>
-                  {rail.length > 0 && (
-                    <optgroup label="Rail lines">
-                      {rail.map((line) => (
-                        <option key={line.id} value={line.id}>
-                          {lineLabel(line)}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {bus.length > 0 && (
-                    <optgroup label="Bus routes">
-                      {bus.map((line) => (
-                        <option key={line.id} value={line.id}>
-                          {lineLabel(line)}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </>
-              );
-            })()}
-          </select>
-        </div>
-
-        {/* Station Filter */}
-        <div className="form-control w-full">
-          <label className="label">
-            <span className="label-text">Filter by Station</span>
-          </label>
-          <select 
-            className="select select-bordered w-full"
-            value={selectedStation?.id || ""}
-            onChange={(e) => handleStationChange(e.target.value || null)}
-            disabled={!selectedTrainLine}
-          >
-            <option value="">All Stations</option>
-            {stations.map((station) => (
-              <option key={station.id} value={station.id}>
-                {station.translated_name || station.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Price Range Filter */}
-        <div className="form-control w-full">
-          <label className="label">
-            <span className="label-text">Filter by Price Range</span>
-          </label>
-          <select 
-            className="select select-bordered w-full"
-            value={selectedPriceRange ? `${selectedPriceRange.min}-${selectedPriceRange.max}` : ""}
-            onChange={(e) => {
-              if (!e.target.value) {
-                handlePriceRangeChange(null);
-              } else {
-                const [min, max] = e.target.value.split("-").map(v => v === "null" ? null : parseInt(v, 10));
-                handlePriceRangeChange({ min, max });
-              }
-            }}
-          >
-            <option value="">Any Price</option>
-            {priceRanges.map((range, index) => (
-              <option key={index} value={`${range.min}-${range.max}`}>
-                {range.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {buildings.length === 0 ? (
-        <div className="bg-warning/10 border border-warning/30 p-4 rounded-lg">
-          <p>No rental properties found matching these criteria.</p>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-6">
-            {buildings.map((building) => (
-              <div key={building.id} className="bg-base-100 border border-base-300 rounded-lg shadow overflow-hidden">
-                {/* Building Information */}
-                <div className="p-3 sm:p-6 border-b border-base-300">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
-                    <div>
-                      <h3 className="text-lg sm:text-xl font-semibold mb-2">{building.title || building.address}</h3>
-                      <div className="text-sm space-y-1">
-                        <p><span className="font-medium">Address:</span> {[t(building.district), t(building.city), t(building.state)].filter(s => s && s !== "-").join(", ")}</p>
-                        <p><span className="font-medium">Type:</span> {t(building.building_type)} · <span className="font-medium">Age:</span> {t(building.age)} · <span className="font-medium">Floors:</span> {t(building.floors)}</p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-medium text-sm mb-1">Stations:</h4>
-                      {(() => {
-                        try {
-                          return (
-                            <ul className="list-disc pl-5 space-y-1">
-                              {building.buildingStations.map((station) => (
-                                <li 
-                                  key={station.id} 
-                                  className={`${
-                                    (selectedStation?.id === station.station.id || 
-                                    (!selectedStation && selectedTrainLine?.id === station.station.train_line.id))
-                                      ? "font-bold" 
-                                      : ""
-                                  }`}
-                                >
-                                  {lineLabel(station.station.train_line)}
-                                  {station.station.train_line.kind === "bus" && (
-                                    <span className="badge badge-ghost badge-sm ml-1 align-middle">Bus</span>
-                                  )}
-                                  {" - "}
-                                  {station.station.translated_name || station.station.name} ({station.walking_minutes} min walk)
-                                </li>
-                              ))}
-                            </ul>
-                          );
-                        } catch {
-                          return <p className="text-base-content/60">No station information available</p>;
-                        }
-                      })()}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Rental Units */}
-                <div className="p-3 sm:p-6">
-                  <h4 className="font-medium mb-3">Available Units ({building.rentalUnits.length})</h4>
-
-                  {/* Mobile: card layout */}
-                  <div className="sm:hidden space-y-3">
-                    {building.rentalUnits.map((unit) => (
-                      <div key={unit.id} className="flex gap-3 p-2 bg-base-200 rounded-lg">
-                        <div className="flex-shrink-0">
-                          {unit.image_urls?.split(',').slice(0, 1).map((image: string, index: number) => (
-                            <img
-                              key={index}
-                              src={image}
-                              className="w-20 h-20 object-cover rounded cursor-pointer"
-                              onClick={() => setSelectedImage(image)}
-                              alt={`Unit ${index + 1}`}
-                            />
-                          ))}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <span className="font-semibold text-lg">{unit.rent_text || formatPrice(unit.rent)}</span>
-                            <a
-                              href={unit.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-2 py-0.5 bg-primary text-white text-xs rounded hover:bg-primary/85 flex-shrink-0"
-                            >
-                              Suumo
-                            </a>
-                          </div>
-                          <div className="text-sm text-base-content/70 mt-0.5">
-                            {unit.layout} · {unit.size_text || `${unit.size}m²`} · {unit.floor}F
-                          </div>
-                          <div className="text-xs text-base-content/60 mt-0.5">
-                            Mgmt {unit.management_fee_text || formatPrice(unit.management_fee)} · Dep {unit.deposit || '-'} · Grat {unit.gratuity || '-'}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Desktop: table layout */}
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="min-w-full">
-                      <thead>
-                        <tr className="bg-base-200">
-                          <th></th>
-                          <th className="py-2 px-3 text-left text-sm">Floor</th>
-                          <th className="py-2 px-3 text-left text-sm">Layout</th>
-                          <th className="py-2 px-3 text-left text-sm">Size</th>
-                          <th className="py-2 px-3 text-right text-sm">Rent</th>
-                          <th className="py-2 px-3 text-right text-sm">Mgmt Fee</th>
-                          <th className="py-2 px-3 text-left text-sm">Dep/Grat</th>
-                          <th className="py-2 px-3 text-left text-sm">Listed</th>
-                          <th className="py-2 px-3 text-center text-sm">Link</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-base-300">
-                        {building.rentalUnits.map((unit) => (
-                          <tr key={unit.id} className="hover:bg-base-200">
-                            <td className="py-1 px-2">
-                              <div className="flex gap-1">
-                                {unit.image_urls?.split(',').slice(0, 2).map((image: string, index: number) => (
-                                  <img
-                                    key={index}
-                                    src={image}
-                                    className="w-14 h-14 object-cover rounded cursor-pointer hover:opacity-90"
-                                    onClick={() => setSelectedImage(image)}
-                                    alt={`Unit ${index + 1}`}
-                                  />
-                                ))}
-                              </div>
-                            </td>
-                            <td className="py-1 px-3 text-sm">{unit.floor}</td>
-                            <td className="py-1 px-3 text-sm">{unit.layout}</td>
-                            <td className="py-1 px-3 text-sm">{unit.size_text || `${unit.size}m²`}</td>
-                            <td className="py-1 px-3 text-right text-sm font-medium">
-                              {unit.rent_text || formatPrice(unit.rent)}
-                            </td>
-                            <td className="py-1 px-3 text-right text-sm">
-                              {unit.management_fee_text || formatPrice(unit.management_fee)}
-                            </td>
-                            <td className="py-1 px-3 text-sm">
-                              <div>{unit.deposit || '-'} / {unit.gratuity || '-'}</div>
-                            </td>
-                            <td className="py-1 px-3 text-xs text-base-content/70">
-                              {formatAge(unit.insert_date as unknown as string)}
-                            </td>
-                            <td className="py-1 px-3 text-center">
-                              <a
-                                href={unit.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-block px-2 py-0.5 bg-primary text-white text-xs rounded hover:bg-primary/85"
-                              >
-                                Suumo
-                              </a>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {building.rentalUnits.length === 20 && (
-                    <div className="mt-3 text-center text-xs text-base-content/60">
-                      Showing first 20 units by rent.
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="mt-8 flex justify-center">
-              <nav className="flex items-center">
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage <= 1}
-                  className={`mx-1 px-3 py-1 rounded ${
-                    currentPage <= 1 
-                      ? 'bg-base-300 text-base-content/60 cursor-not-allowed' 
-                      : 'bg-primary text-white hover:bg-primary/85'
-                  }`}
-                >
-                  Previous
-                </button>
-                
-                <div className="flex mx-2">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i;
-                    } else {
-                      pageNum = currentPage - 2 + i;
-                    }
-                    
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => handlePageChange(pageNum)}
-                        className={`mx-1 px-3 py-1 rounded ${
-                          currentPage === pageNum
-                            ? 'bg-primary text-white'
-                            : 'bg-primary/10 text-primary hover:bg-primary/20'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
-                  
-                  {totalPages > 5 && currentPage < totalPages - 2 && (
-                    <>
-                      <span className="mx-1">...</span>
-                      <button
-                        onClick={() => handlePageChange(totalPages)}
-                        className="mx-1 px-3 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20"
-                      >
-                        {totalPages}
-                      </button>
-                    </>
-                  )}
-                </div>
-                
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage >= totalPages}
-                  className={`mx-1 px-3 py-1 rounded ${
-                    currentPage >= totalPages
-                      ? 'bg-base-300 text-base-content/60 cursor-not-allowed'
-                      : 'bg-primary text-white hover:bg-primary/85'
-                  }`}
-                >
-                  Next
-                </button>
-              </nav>
+      <div className="flex flex-wrap items-start gap-7">
+        <aside aria-label="Filters" className="flex min-w-0 flex-[1_1_280px] flex-col gap-5 rounded-box border border-base-300 bg-base-100 p-5">
+          <FilterGroup legend="Train line">
+            <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+              <label className={`${FILTER_ROW} ${!selectedTrainLine ? "bg-base-200 font-semibold" : ""}`}>
+                <input
+                  type="radio"
+                  name="line"
+                  value=""
+                  checked={!selectedTrainLine}
+                  onChange={() => applyFilters({ trainLine: null, station: null })}
+                  className="radio radio-primary radio-sm"
+                />
+                <span className="flex-1">All lines</span>
+                <span className="text-[13px] tabular-nums text-base-content/60">{allBuildingCount.toLocaleString("en-US")}</span>
+              </label>
+              {trainLines.map((line) => {
+                const selected = selectedTrainLine?.id === line.id;
+                return (
+                  <label key={line.id} className={`${FILTER_ROW} ${selected ? "bg-base-200 font-semibold" : ""}`}>
+                    <input
+                      type="radio"
+                      name="line"
+                      value={line.id}
+                      checked={selected}
+                      onChange={() => applyFilters({ trainLine: String(line.id), station: null })}
+                      className="radio radio-primary radio-sm"
+                    />
+                    <span className="flex-1 truncate">{line.label}</span>
+                    {line.bus && <span className="badge badge-ghost badge-sm">Bus</span>}
+                    <span className="text-[13px] tabular-nums text-base-content/60">{line.buildingCount.toLocaleString("en-US")}</span>
+                  </label>
+                );
+              })}
             </div>
+          </FilterGroup>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-bold uppercase tracking-[0.06em] text-base-content/70">Station</span>
+            <select
+              value={selectedStation?.id ?? ""}
+              disabled={!selectedTrainLine}
+              onChange={(event) => applyFilters({ station: event.target.value })}
+              className="select min-h-11 w-full"
+            >
+              <option value="">All stations on this line</option>
+              {stations.map((station) => (
+                <option key={station.id} value={station.id}>
+                  {station.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <FilterGroup legend="Monthly rent">
+            {priceChoices.map((choice) => (
+              <label key={choice.value} className={`${FILTER_ROW} ${priceChoice === choice.value ? "bg-base-200 font-semibold" : ""}`}>
+                <input
+                  type="radio"
+                  name="rent"
+                  value={choice.value}
+                  checked={priceChoice === choice.value}
+                  onChange={() => applyFilters({ minPrice: choice.minPrice, maxPrice: choice.maxPrice })}
+                  className="radio radio-primary radio-sm"
+                />
+                <span className="tabular-nums">{choice.label}</span>
+              </label>
+            ))}
+          </FilterGroup>
+        </aside>
+
+        <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
+          {hasFilters && (
+            <ul aria-label="Active filters" className="m-0 flex list-none flex-wrap gap-2 p-0">
+              {selectedTrainLine && (
+                <li>
+                  <Link
+                    to={hrefWith({ trainLine: null, station: null })}
+                    aria-label={`Remove filter: ${selectedTrainLine.label}`}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-3 pr-2.5 text-sm font-semibold text-primary no-underline hover:bg-primary/20"
+                  >
+                    {selectedTrainLine.label}
+                    <span aria-hidden="true">✕</span>
+                  </Link>
+                </li>
+              )}
+              {selectedStation && (
+                <li>
+                  <Link
+                    to={hrefWith({ station: null })}
+                    aria-label={`Remove filter: ${selectedStation.label}`}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-3 pr-2.5 text-sm font-semibold text-primary no-underline hover:bg-primary/20"
+                  >
+                    {selectedStation.label}
+                    <span aria-hidden="true">✕</span>
+                  </Link>
+                </li>
+              )}
+              {activePriceLabel && (
+                <li>
+                  <Link
+                    to={hrefWith({ minPrice: null, maxPrice: null })}
+                    aria-label={`Remove filter: ${activePriceLabel}`}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-3 pr-2.5 text-sm font-semibold text-primary no-underline hover:bg-primary/20"
+                  >
+                    {activePriceLabel}
+                    <span aria-hidden="true">✕</span>
+                  </Link>
+                </li>
+              )}
+            </ul>
           )}
-        </>
-      )}
+
+          {countTotal === 0 ? (
+            <div className="flex flex-col gap-2 rounded-box border border-base-300 bg-base-100 p-6">
+              <p className="m-0">
+                {hasFilters ? "No rental buildings match these filters." : "No rental buildings in this area yet."}
+              </p>
+              {hasFilters && (
+                <Link to="." className="font-medium text-primary">
+                  Clear filters
+                </Link>
+              )}
+            </div>
+          ) : (
+            <>
+              {buildings.map((building) => {
+                const title = building.title || building.address;
+                const addressLine = [t(building.district), t(building.city), t(building.state)]
+                  .filter((part) => part && part !== "-")
+                  .join(", ");
+                const meta = [t(building.building_type), t(building.age), t(building.floors)].filter((part) => part !== "-");
+
+                return (
+                  <article key={building.id} className="overflow-hidden rounded-box border border-base-300 bg-base-100">
+                    <div className="flex flex-wrap gap-5 p-5">
+                      <div className="relative h-[126px] w-[168px] shrink-0 overflow-hidden rounded-field bg-base-300">
+                        {building.main_image_url ? (
+                          <img src={building.main_image_url} alt="" loading="lazy" className="size-full object-cover" />
+                        ) : null}
+                      </div>
+
+                      <div className="flex min-w-0 flex-[1_1_260px] flex-col gap-2">
+                        <div className="flex flex-wrap items-baseline justify-between gap-3">
+                          <h2 className="m-0 font-display text-lg font-semibold leading-snug">{title}</h2>
+                          <span className="text-[13px] text-base-content/60">Updated {formatAge(building.last_updated as unknown as string)}</span>
+                        </div>
+                        {addressLine && <p className="m-0 text-base-content/80">{addressLine}</p>}
+                        {meta.length > 0 && (
+                          <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+                            {meta.map((item) => (
+                              <li key={item} className="rounded-md bg-base-200 px-2.5 py-0.5 text-[13px] font-medium text-base-content/80">
+                                {item}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <ul aria-label="Nearby stations" className="m-0 flex min-w-0 flex-[1_1_240px] list-none flex-col gap-1.5 p-0">
+                        {building.buildingStations.map((link) => {
+                          const onSelectedLine = selectedTrainLine?.id === link.station.train_line.id;
+                          const onSelectedStation = selectedStation?.id === link.station.id;
+                          const highlighted = onSelectedStation || (!selectedStation && onSelectedLine);
+                          return (
+                            <li
+                              key={link.id}
+                              className={`flex items-center gap-2.5 text-sm ${highlighted ? "font-semibold text-base-content" : "text-base-content/70"}`}
+                            >
+                              <span
+                                aria-hidden="true"
+                                className={`size-2 shrink-0 rounded-full ${highlighted ? "bg-primary" : "bg-base-300"}`}
+                              />
+                              <span className="min-w-0 flex-1 truncate">
+                                <strong className="font-semibold">{link.station.translated_name || link.station.name}</strong>
+                                {" · "}
+                                {lineLabel(link.station.train_line)}
+                                {link.station.train_line.kind === "bus" && <span className="badge badge-ghost badge-sm ml-1">Bus</span>}
+                              </span>
+                              <span className="shrink-0 tabular-nums">{link.walking_minutes} min walk</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+
+                    <div className="overflow-x-auto border-t border-base-300">
+                      <table className="w-full min-w-[640px] border-collapse text-sm tabular-nums">
+                        <caption className="sr-only">Available units in {title}</caption>
+                        <thead>
+                          <tr className="bg-base-200/60 text-left text-xs font-semibold uppercase tracking-[0.05em] text-base-content/60">
+                            <th scope="col" className="px-5 py-2.5 font-semibold">Floor</th>
+                            <th scope="col" className="px-3 py-2.5 font-semibold">Layout</th>
+                            <th scope="col" className="px-3 py-2.5 font-semibold">Size</th>
+                            <th scope="col" className="px-3 py-2.5 text-right font-semibold">Rent</th>
+                            <th scope="col" className="px-3 py-2.5 text-right font-semibold">Mgmt fee</th>
+                            <th scope="col" className="px-3 py-2.5 font-semibold">Deposit / Key money</th>
+                            <th scope="col" className="px-5 py-2.5 text-right font-semibold">
+                              <span className="sr-only">Listing</span>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {building.rentalUnits.map((unit) => (
+                            <tr key={unit.id} className="border-t border-base-300/60">
+                              <td className="px-5 py-2.5">{unit.floor ?? "—"}</td>
+                              <td className="px-3 py-2.5 font-semibold">{unit.layout ?? "—"}</td>
+                              <td className="px-3 py-2.5">{unit.size_text || (unit.size > 0 ? sqm(unit.size) : "—")}</td>
+                              <td className="px-3 py-2.5 text-right text-[15px] font-bold">{unit.rent_text || yen(unit.rent)}</td>
+                              <td className="px-3 py-2.5 text-right text-base-content/80">
+                                {unit.management_fee_text || (unit.management_fee > 0 ? yen(unit.management_fee) : "—")}
+                              </td>
+                              <td className="px-3 py-2.5 text-base-content/80">
+                                {unit.deposit || "—"} / {unit.gratuity || "—"}
+                              </td>
+                              <td className="px-5 py-2.5 text-right">
+                                <a
+                                  href={unit.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex min-h-9 items-center font-medium text-primary no-underline hover:underline"
+                                >
+                                  Suumo ↗
+                                </a>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {building.rentalUnits.length === UNITS_PER_BUILDING && (
+                        <p className="m-0 border-t border-base-300/60 px-5 py-2 text-xs text-base-content/60">
+                          Showing the first {UNITS_PER_BUILDING} units by rent.
+                        </p>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageHref={(page) => hrefWith({ page: page <= 1 ? null : String(page) }, true)}
+                summary={`Showing ${firstShown}–${lastShown} of ${countTotal.toLocaleString("en-US")} buildings`}
+              />
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
-} 
+}
