@@ -2,6 +2,7 @@ import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { getRetrievalJobWithSections } from "../services/retrievalJobService.server.js";
 import { requireAdminAuth } from "../utils/auth.server.js";
+import { AdminShell, BUTTON_SECONDARY, PageHeader, PANEL, StatusPill } from "../components/AdminUi.js";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdminAuth(request);
@@ -34,69 +35,79 @@ const stopReasonLabel: Record<string, string> = {
   "failed": "Failed",
 };
 
+const HEAD_CELL = "whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-[0.05em] text-base-content/70";
+
 export default function RetrievalJobSectionsPage() {
   const { job } = useLoaderData<typeof loader>();
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Retrieval job #{job.id}</h1>
-          <p className="text-sm text-base-content/60">
-            {job.status.toUpperCase()} · started {new Date(job.startTime).toLocaleString()} · {formatDuration(job.startTime, job.endTime)}
-          </p>
-          {job.errorMessage && <p className="text-sm text-red-600 mt-1">{job.errorMessage}</p>}
-        </div>
-        <Link
-          to="/admin/retrieval/history"
-          className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85"
-        >
-          Back to History
-        </Link>
-      </div>
+    <AdminShell>
+      <PageHeader
+        title={`Retrieval job #${job.id}`}
+        description={
+          <span className="flex flex-col gap-2">
+            <span className="flex flex-wrap items-center gap-2.5 text-base-content/80">
+              <StatusPill status={job.status} />
+              <span>
+                Started {new Date(job.startTime).toLocaleString()} · {formatDuration(job.startTime, job.endTime)}
+              </span>
+            </span>
+            {job.errorMessage && (
+              <span className="rounded-field bg-error/10 px-3 py-2 text-sm font-medium text-error">{job.errorMessage}</span>
+            )}
+          </span>
+        }
+        actions={
+          <Link to="/admin/retrieval/history" className={BUTTON_SECONDARY}>
+            Back to history
+          </Link>
+        }
+      />
 
       {job.sections.length === 0 ? (
-        <p className="text-base-content/60">
+        <p className={`${PANEL} m-0 p-6 text-base-content/70`}>
           No section records for this job. Jobs run before section recording was added have none.
         </p>
       ) : (
-        <div className="overflow-x-auto bg-base-100 rounded-lg shadow">
-          <table className="min-w-full divide-y divide-base-300 text-sm">
-            <thead className="bg-base-200">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium">Section</th>
-                <th className="px-4 py-3 text-right font-medium">Items found</th>
-                <th className="px-4 py-3 text-right font-medium">Scraped pages</th>
-                <th className="px-4 py-3 text-right font-medium">Computed pages</th>
-                <th className="px-4 py-3 text-right font-medium">Pages used</th>
-                <th className="px-4 py-3 text-right font-medium">Pages fetched</th>
-                <th className="px-4 py-3 text-right font-medium">Items processed</th>
-                <th className="px-4 py-3 text-right font-medium">New / updated</th>
-                <th className="px-4 py-3 text-left font-medium">Stop reason</th>
-                <th className="px-4 py-3 text-left font-medium">Duration</th>
-                <th className="px-4 py-3 text-left font-medium">Error</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-base-300">
-              {job.sections.map((section) => (
-                <tr key={section.id} className="hover:bg-base-200">
-                  <td className="px-4 py-2 whitespace-nowrap font-mono">{section.sectionKey}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{section.calcTotalItems.toLocaleString()}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{section.scrapedPages}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{section.computedPages}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{section.totalPages}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{section.pagesFetched}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{section.itemsProcessed.toLocaleString()}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{section.newItems} / {section.updatedItems}</td>
-                  <td className="px-4 py-2 whitespace-nowrap">{stopReasonLabel[section.stopReason] ?? section.stopReason}</td>
-                  <td className="px-4 py-2 whitespace-nowrap text-base-content/60">{formatDuration(section.startedAt, section.finishedAt)}</td>
-                  <td className="px-4 py-2 text-red-600">{section.errorMessage ?? ""}</td>
+        <section aria-label="Sections" className={`${PANEL} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1000px] border-collapse text-sm">
+              <thead className="bg-base-200/60">
+                <tr className="text-left">
+                  <th scope="col" className={HEAD_CELL}>Section</th>
+                  <th scope="col" className={`${HEAD_CELL} text-right`}>Items found</th>
+                  <th scope="col" className={`${HEAD_CELL} text-right`}>Scraped pages</th>
+                  <th scope="col" className={`${HEAD_CELL} text-right`}>Computed pages</th>
+                  <th scope="col" className={`${HEAD_CELL} text-right`}>Pages used</th>
+                  <th scope="col" className={`${HEAD_CELL} text-right`}>Pages fetched</th>
+                  <th scope="col" className={`${HEAD_CELL} text-right`}>Items processed</th>
+                  <th scope="col" className={`${HEAD_CELL} text-right`}>New / updated</th>
+                  <th scope="col" className={HEAD_CELL}>Stop reason</th>
+                  <th scope="col" className={HEAD_CELL}>Duration</th>
+                  <th scope="col" className={HEAD_CELL}>Error</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {job.sections.map((section) => (
+                  <tr key={section.id} className="border-t border-base-300/60 hover:bg-base-200/50">
+                    <td className="whitespace-nowrap px-4 py-2.5 font-mono text-[13px] font-medium">{section.sectionKey}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{section.calcTotalItems.toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{section.scrapedPages}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{section.computedPages}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{section.totalPages}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{section.pagesFetched}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{section.itemsProcessed.toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{section.newItems} / {section.updatedItems}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5">{stopReasonLabel[section.stopReason] ?? section.stopReason}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-base-content/70">{formatDuration(section.startedAt, section.finishedAt)}</td>
+                    <td className="px-4 py-2.5 text-error">{section.errorMessage ?? ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
-    </div>
+    </AdminShell>
   );
 }

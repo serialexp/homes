@@ -5,6 +5,17 @@ import { propertyTypes, areas } from "../data/propertyData.js";
 import { enqueueRetrieval, getRetrievalProcessStatus, cancelRetrieval } from "../services/retrievalQueue.server.js";
 import { storeRetrievalStatus } from "../services/redis.server.js";
 import { requireAdminAuth } from "../utils/auth.server.js";
+import {
+  BUTTON_DANGER,
+  BUTTON_PRIMARY,
+  BUTTON_SECONDARY,
+  CODE_BLOCK,
+  INPUT,
+  LABEL,
+  PageHeader,
+  PANEL,
+  StatusPill,
+} from "../components/AdminUi.js";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdminAuth(request);
@@ -86,14 +97,16 @@ export default function RetrievalPage() {
   const submit = useSubmit();
   
   const [selectedRegion, setSelectedRegion] = useState<string>("all");
-  const [currentStatus, setCurrentStatus] = useState(status);
+  // A status hash can hold only some fields (a partial update with no state); treat that as no status.
+  const [currentStatus, setCurrentStatus] = useState(status?.status ? status : null);
   const isActive = currentStatus?.status === 'running' || currentStatus?.status === 'queued';
   
   // Follow progress as the worker publishes it, instead of polling
   useEffect(() => {
     const events = new EventSource("/admin/retrieval/events");
     events.onmessage = event => {
-      setCurrentStatus(JSON.parse(event.data));
+      const next = JSON.parse(event.data);
+      setCurrentStatus(next?.status ? next : null);
     };
     return () => events.close();
   }, []);
@@ -125,120 +138,167 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
     : 0;
   
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold mb-6">Property Data Retrieval</h2>
-        <Link 
-          to="/admin/retrieval/history" 
-          className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85"
-        >
-          View History
-        </Link>
-      </div>
-      
+    <>
+      <PageHeader
+        title="Retrieval"
+        description="Scrapes Suumo in three phases. Runs automatically every day at 10:30 JST."
+        actions={
+          <Link to="/admin/retrieval/history" className={BUTTON_SECONDARY}>
+            Job history
+          </Link>
+        }
+      />
+
       {/* Status Display */}
       {currentStatus && (
-        <div className="mb-8 bg-base-100 p-6 rounded-lg shadow">
-          <h3 className="text-xl font-semibold mb-4">Current Status</h3>
-          
-          <div className="mb-4">
-            <div className="flex justify-between mb-1">
-              <span className="font-medium">Status: <span className={`font-bold ${
-                isActive ? 'text-primary' :
-                currentStatus.status === 'completed' ? 'text-green-600' :
-                currentStatus.status === 'failed' ? 'text-red-600' :
-                currentStatus.status === 'cancelled' ? 'text-yellow-600' : ''
-              }`}>{currentStatus.status.toUpperCase()}</span></span>
-              
+        <section aria-labelledby="now-h" className={`${PANEL} overflow-hidden`}>
+          <div className="flex flex-col gap-5 p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h2 id="now-h" className="m-0 text-lg font-semibold">Current status</h2>
+                  <StatusPill status={currentStatus.status} />
+                </div>
+                <span className="text-sm text-base-content/70">
+                  Started {new Date(currentStatus.startTime).toLocaleString()}
+                </span>
+              </div>
               {currentStatus.status === 'running' && (
-                <span>{progressPercentage}% Complete</span>
+                <div className="flex flex-col items-end">
+                  <span className="font-display text-[34px] font-bold leading-none tracking-[-0.02em] tabular-nums">
+                    {progressPercentage}%
+                  </span>
+                  {currentStatus.estimatedCompletionTime && (
+                    <span className="text-[13px] text-base-content/70">
+                      Est. finish {new Date(currentStatus.estimatedCompletionTime).toLocaleString()}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
-            
-            
+
             {currentStatus.status === 'running' && (
-              <>
-              <div className="w-full bg-base-300 rounded-full h-2.5">
-                <div 
-                  className="bg-green-600 h-2.5 rounded-full" 
-                  style={{ width: `${sectionsProgressPercentage}%` }}
-                ></div>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between gap-2 text-sm">
+                    <span className="font-medium">Sections</span>
+                    <span className="tabular-nums text-base-content/70">{sectionsProcessed} / {sectionsToFetch}</span>
+                  </div>
+                  <div role="progressbar" aria-label="Sections" aria-valuenow={sectionsProgressPercentage} aria-valuemin={0} aria-valuemax={100} className="h-2.5 overflow-hidden rounded-full bg-base-300">
+                    <div className="h-2.5 rounded-full bg-primary" style={{ width: `${sectionsProgressPercentage}%` }} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between gap-2 text-sm">
+                    <span className="font-medium">Items</span>
+                    <span className="tabular-nums text-base-content/70">{currentStatus.progress} / {currentStatus.total}</span>
+                  </div>
+                  <div role="progressbar" aria-label="Items" aria-valuenow={progressPercentage} aria-valuemin={0} aria-valuemax={100} className="h-2.5 overflow-hidden rounded-full bg-base-300">
+                    <div className="h-2.5 rounded-full bg-[#5A78B4]" style={{ width: `${progressPercentage}%` }} />
+                  </div>
+                </div>
               </div>
-              <div className="w-full mt-2 bg-base-300 rounded-full h-2.5">
-                <div 
-                  className="bg-primary h-2.5 rounded-full" 
-                  style={{ width: `${progressPercentage}%` }}
-                ></div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <span className={LABEL}>Message</span>
+              <p className={`${CODE_BLOCK} text-[13px] leading-normal`}>{currentStatus.message}</p>
+            </div>
+
+            <dl className="m-0 grid grid-cols-[repeat(auto-fit,minmax(min(160px,100%),1fr))] gap-x-5 gap-y-3.5 text-sm">
+              {currentStatus.status === 'running' && currentStatus.estimatedCompletionTime && (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-base-content/60">Estimated completion</dt>
+                  <dd className="m-0 font-semibold">{new Date(currentStatus.estimatedCompletionTime).toLocaleString()}</dd>
+                </div>
+              )}
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-base-content/60">Sections processed</dt>
+                <dd className="m-0 font-semibold tabular-nums">{sectionsProcessed} / {sectionsToFetch}</dd>
               </div>
-              </>
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-base-content/60">Items processed</dt>
+                <dd className="m-0 font-semibold tabular-nums">{currentStatus.progress} / {currentStatus.total}</dd>
+              </div>
+              {currentStatus.endTime && (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-base-content/60">Completed</dt>
+                  <dd className="m-0 font-semibold">{new Date(currentStatus.endTime).toLocaleString()}</dd>
+                </div>
+              )}
+            </dl>
+
+            {currentStatus.error && (
+              <p role="alert" className="m-0 rounded-field bg-error/10 px-3.5 py-2.5 text-sm font-medium text-error">
+                Error: {currentStatus.error}
+              </p>
             )}
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <p><span className="font-medium">Message:</span> {currentStatus.message}</p>
-              <p><span className="font-medium">Started:</span> {new Date(currentStatus.startTime).toLocaleString()}</p>
-              {currentStatus.status === 'running' && currentStatus.estimatedCompletionTime && (
-                <p><span className="font-medium">Estimated Completion:</span> {new Date(currentStatus.estimatedCompletionTime).toLocaleString()}</p>
-              )}
-            </div>
-            <div>
-              <p><span className="font-medium">Sections Processed:</span> {sectionsProcessed} / {sectionsToFetch}</p>
-              <p><span className="font-medium">Items Processed:</span> {currentStatus.progress} / {currentStatus.total}</p>
-              {currentStatus.endTime && (
-                <p><span className="font-medium">Completed:</span> {new Date(currentStatus.endTime).toLocaleString()}</p>
-              )}
-              {currentStatus.error && (
-                <p className="text-red-600"><span className="font-medium">Error:</span> {currentStatus.error}</p>
-              )}
-            </div>
-          </div>
-          
+
           {/* Cancel / Reset Buttons */}
           {currentStatus.status !== 'idle' && (
-            <div className="mt-4 flex space-x-2">
-              {isActive && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 bg-base-200/60 px-6 py-4">
+              <span className="text-sm text-base-content/70">
+                Cancelling stops after the current page finishes. Force reset only clears a stuck status.
+              </span>
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={handleCancel}
-                  className="px-4 py-2 bg-red-600 text-white font-medium rounded-md hover:bg-red-700 disabled:bg-gray-400"
+                  onClick={handleReset}
+                  className={BUTTON_SECONDARY}
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? "Cancelling..." : "Cancel Retrieval"}
+                  Force reset
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={handleReset}
-                className="px-4 py-2 bg-gray-600 text-white font-medium rounded-md hover:bg-gray-700 disabled:bg-gray-400"
-                disabled={isSubmitting}
-              >
-                Force Reset
-              </button>
+                {isActive && (
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    className={BUTTON_DANGER}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Cancelling..." : "Cancel retrieval"}
+                  </button>
+                )}
+              </div>
             </div>
           )}
-        </div>
+        </section>
       )}
       
       {/* Start New Retrieval Form */}
-      <div className="bg-base-100 p-6 rounded-lg shadow">
-        <h3 className="text-xl font-semibold mb-4">Start New Retrieval</h3>
-        
+      <section aria-labelledby="new-h" className={`${PANEL} flex flex-col gap-5 p-6`}>
+        <div className="flex flex-col gap-1">
+          <h2 id="new-h" className="m-0 text-lg font-semibold">Start a manual retrieval</h2>
+          <p className="m-0 text-base-content/70">Narrow the scope to re-run one region, prefecture or property type.</p>
+        </div>
+
         {actionData && (
-          <div className={`p-4 mb-4 rounded-lg ${actionData.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+          <p
+            role="status"
+            className={`m-0 rounded-field px-3.5 py-2.5 text-sm font-medium ${
+              actionData.success ? 'bg-success/10 text-success' : 'bg-error/10 text-error'
+            }`}
+          >
             {actionData.message}
-          </div>
+          </p>
+        )}
+
+        {isActive && (
+          <p role="status" className="m-0 rounded-field bg-base-200 px-3.5 py-2.5 text-sm font-medium text-base-content/80">
+            Cannot start a new retrieval while one is already queued or running
+          </p>
         )}
         
-        <Form method="post">
+        <Form method="post" className="flex flex-col gap-5">
           <input type="hidden" name="_action" value="start" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <label htmlFor="type" className="block text-sm font-medium text-base-content/70 mb-1">Property Type</label>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="type" className={LABEL}>Property Type</label>
               <select 
                 id="type" 
                 name="type" 
-                className="w-full p-2 border border-base-300 rounded-md"
+                className={INPUT}
                 disabled={isSubmitting || isActive}
               >
                 <option value="all">All Property Types</option>
@@ -248,12 +308,12 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
               </select>
             </div>
             
-            <div>
-              <label htmlFor="region" className="block text-sm font-medium text-base-content/70 mb-1">Region</label>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="region" className={LABEL}>Region</label>
               <select 
                 id="region" 
                 name="region" 
-                className="w-full p-2 border border-base-300 rounded-md"
+                className={INPUT}
                 disabled={isSubmitting || isActive}
                 value={selectedRegion}
                 onChange={(e) => setSelectedRegion(e.target.value)}
@@ -265,48 +325,44 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
               </select>
             </div>
             
-            <div>
-              <label htmlFor="province" className="block text-sm font-medium text-base-content/70 mb-1">Province</label>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="province" className={LABEL}>Prefecture</label>
               <select 
                 id="province" 
                 name="province" 
-                className="w-full p-2 border border-base-300 rounded-md"
+                className={INPUT}
                 disabled={isSubmitting || isActive || selectedRegion === "all"}
               >
-                <option value="all">All Provinces</option>
+                <option value="all">All Prefectures</option>
                 {selectedRegion !== "all" && Object.entries(areas[selectedRegion as keyof typeof areas]?.provinces || {}).map(([id, name]) => (
                   <option key={id} value={id}>{String(name)}</option>
                 ))}
               </select>
             </div>
-            
-            <div className="flex items-center">
-              <input 
-                type="checkbox" 
-                id="refresh" 
-                name="refresh" 
-                className="h-4 w-4 text-primary border-base-300 rounded"
-                disabled={isSubmitting || isActive}
-              />
-              <label htmlFor="refresh" className="ml-2 block text-sm text-base-content/70">
-                Refresh (clear existing pages)
-              </label>
-            </div>
           </div>
+
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-field border border-base-300 p-4 text-sm font-medium has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
+            <input
+              type="checkbox"
+              id="refresh"
+              name="refresh"
+              className="size-4 shrink-0 accent-primary"
+              disabled={isSubmitting || isActive}
+            />
+            Refresh (clear existing pages)
+          </label>
           
-          <button 
-            type="submit" 
-            className="w-full md:w-auto px-6 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85 disabled:bg-gray-400"
-            disabled={isSubmitting || isActive}
-          >
-            {isSubmitting ? "Starting..." : "Start Retrieval"}
-          </button>
-          
-          {isActive && (
-            <p className="mt-2 text-sm text-red-600">Cannot start a new retrieval while one is already queued or running</p>
-          )}
+          <div>
+            <button
+              type="submit"
+              className={BUTTON_PRIMARY}
+              disabled={isSubmitting || isActive}
+            >
+              {isSubmitting ? "Starting..." : "Start retrieval"}
+            </button>
+          </div>
         </Form>
-      </div>
-    </div>
+      </section>
+    </>
   );
-} 
+}

@@ -4,7 +4,16 @@ import { getRetrievalJobs, getRetrievalJobStats, completeRetrievalJob } from "..
 import { storeRetrievalStatus, getRetrievalStatus } from "../services/redis.server.js";
 import { requireAdminAuth } from "../utils/auth.server.js";
 import prisma from "../utils/db.server.js";
-import type { RetrievalJob } from "@prisma/client";
+import { areas, propertyTypes } from "../data/propertyData.js";
+import { Pagination } from "../components/Pagination.js";
+import {
+  AdminShell,
+  BUTTON_PRIMARY,
+  BUTTON_SECONDARY,
+  PageHeader,
+  PANEL,
+  StatusPill,
+} from "../components/AdminUi.js";
 
 // Define a type for the serialized job data
 type SerializedRetrievalJob = {
@@ -94,6 +103,16 @@ export async function action({ request }: ActionFunctionArgs) {
   return json({ success: false }, { status: 400 });
 }
 
+// Human-readable scope of a job, falling back to the stored ids when a name is unknown.
+function scopeLabels(job: SerializedRetrievalJob): string[] {
+  const labels: string[] = [];
+  if (job.type) labels.push(propertyTypes[job.type] ?? job.type);
+  if (job.region) labels.push(areas[job.region]?.name ?? job.region);
+  if (job.region && job.province) labels.push(areas[job.region]?.provinces[job.province] ?? job.province);
+  if (job.refresh) labels.push("Refresh");
+  return labels;
+}
+
 export default function RetrievalHistoryPage() {
   const { jobsData, stats } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
@@ -113,173 +132,151 @@ export default function RetrievalHistoryPage() {
     
     return `${minutes}m ${seconds}s`;
   };
+
+  const { page, limit, total, totalPages } = jobsData.pagination;
+  const firstShown = total === 0 ? 0 : (page - 1) * limit + 1;
+  const lastShown = Math.min(page * limit, total);
   
-  // Get status badge color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      case 'cancelled':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'running':
-        return 'bg-primary/10 text-primary';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const statTiles = [
+    { label: "Total jobs", value: stats.total, dot: "bg-[#8A90A0]" },
+    { label: "Completed", value: stats.completed, dot: "bg-[#1A5C3A]" },
+    { label: "Failed", value: stats.failed, dot: "bg-[#B8301A]" },
+    { label: "Cancelled", value: stats.cancelled, dot: "bg-[#B07A10]" },
+    { label: "Success rate", value: `${stats.successRate}%`, dot: "bg-primary" },
+  ];
   
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Retrieval Job History</h2>
-        <div className="flex space-x-2">
-          <Form method="post">
-            <input type="hidden" name="_action" value="reset_all_stuck" />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-yellow-600 text-white font-medium rounded-md hover:bg-yellow-700"
-            >
-              Reset All Stuck Jobs
-            </button>
-          </Form>
-          <Link
-            to="/admin/retrieval"
-            className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary/85"
-          >
-            Back to Retrieval
-          </Link>
-        </div>
-      </div>
+    <AdminShell>
+      <PageHeader
+        title="Job history"
+        description="Every retrieval run, scheduled or manual."
+        actions={
+          <>
+            <Form method="post">
+              <input type="hidden" name="_action" value="reset_all_stuck" />
+              <button type="submit" className={BUTTON_SECONDARY}>
+                Mark stuck jobs as failed
+              </button>
+            </Form>
+            <Link to="/admin/retrieval" className={BUTTON_PRIMARY}>
+              Retrieval
+            </Link>
+          </>
+        }
+      />
       
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-        <div className="bg-base-100 p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-base-content/60">Total Jobs</h3>
-          <p className="text-2xl font-bold">{stats.total}</p>
-        </div>
-        <div className="bg-base-100 p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-base-content/60">Completed</h3>
-          <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
-        </div>
-        <div className="bg-base-100 p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-base-content/60">Failed</h3>
-          <p className="text-2xl font-bold text-red-600">{stats.failed}</p>
-        </div>
-        <div className="bg-base-100 p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-base-content/60">Cancelled</h3>
-          <p className="text-2xl font-bold text-yellow-600">{stats.cancelled}</p>
-        </div>
-        <div className="bg-base-100 p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-base-content/60">Success Rate</h3>
-          <p className="text-2xl font-bold">{stats.successRate}%</p>
-        </div>
-      </div>
+      {/* Stats */}
+      <dl className={`m-0 grid grid-cols-[repeat(auto-fit,minmax(min(150px,100%),1fr))] overflow-hidden ${PANEL}`}>
+        {statTiles.map((tile) => (
+          <div key={tile.label} className="flex flex-col gap-0.5 border-b border-r border-base-300/60 px-5 py-4">
+            <dt className="flex items-center gap-2 text-[13px] text-base-content/70">
+              <span aria-hidden="true" className={`size-2 rounded-full ${tile.dot}`} />
+              {tile.label}
+            </dt>
+            <dd className="m-0 font-display text-[26px] font-bold tracking-[-0.02em] tabular-nums">{tile.value}</dd>
+          </div>
+        ))}
+      </dl>
       
       {/* Jobs Table */}
-      <div className="bg-base-100 rounded-lg shadow overflow-hidden">
+      <section aria-label="Jobs" className={`${PANEL} overflow-hidden`}>
         <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-base-300">
-          <thead className="bg-base-200">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">ID</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Status</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Started</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Duration</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Filters</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Items</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Pages</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-base-content/60 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-base-100 divide-y divide-base-300">
-            {jobsData.jobs.map((job: SerializedRetrievalJob) => (
-              <tr key={job.id} className="hover:bg-base-200">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-base-content">{job.id}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(job.status)}`}>
-                    {job.status.toUpperCase()}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-base-content/60">
-                  {new Date(job.startTime).toLocaleString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-base-content/60">
-                  {formatDuration(job.startTime, job.endTime)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-base-content/60">
-                  {job.region ? `Region: ${job.region}` : ''}
-                  {job.province ? `, Province: ${job.province}` : ''}
-                  {job.type ? `, Type: ${job.type}` : ''}
-                  {job.refresh ? ', Refresh: Yes' : ''}
-                  {!job.region && !job.province && !job.type && !job.refresh ? 'None' : ''}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-base-content/60">
-                  {job.processedItems} / {job.totalItems}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-base-content/60">
-                  {job.downloadedPages} / {job.totalPages}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <Link
-                    to={`/admin/retrieval/history/${job.id}`}
-                    className="text-primary hover:text-base-content font-medium mr-4"
-                  >
-                    Sections
-                  </Link>
-                  {(job.status === 'running' || job.status === 'queued') && (
-                    <Form method="post">
-                      <input type="hidden" name="_action" value="mark_failed" />
-                      <input type="hidden" name="processId" value={job.processId} />
-                      <button
-                        type="submit"
-                        className="text-red-600 hover:text-red-800 font-medium"
-                      >
-                        Mark Failed
-                      </button>
-                    </Form>
-                  )}
-                </td>
-              </tr>
-            ))}
-            
-            {jobsData.jobs.length === 0 && (
+          <table className="w-full min-w-[900px] border-collapse text-sm tabular-nums">
+            <thead className="bg-base-200/60 text-left text-xs font-semibold uppercase tracking-[0.05em] text-base-content/70">
               <tr>
-                <td colSpan={8} className="px-6 py-4 text-center text-sm text-base-content/60">
-                  No retrieval jobs found
-                </td>
+                <th scope="col" className="px-4 py-3">ID</th>
+                <th scope="col" className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Started</th>
+                <th scope="col" className="px-4 py-3">Duration</th>
+                <th scope="col" className="px-4 py-3">Scope</th>
+                <th scope="col" className="px-4 py-3 text-right">Items</th>
+                <th scope="col" className="px-4 py-3 text-right">Pages</th>
+                <th scope="col" className="px-4 py-3">Actions</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {jobsData.jobs.map((job: SerializedRetrievalJob) => {
+                const scope = scopeLabels(job);
+                const isOpen = job.status === 'running' || job.status === 'queued';
+                return (
+                  <tr key={job.id} className="border-t border-base-300/60 align-middle hover:bg-base-200/50">
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-[13px] font-medium">#{job.id}</td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <StatusPill status={job.status} />
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-base-content/70">
+                      {new Date(job.startTime).toLocaleString()}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-base-content/80">
+                      {formatDuration(job.startTime, job.endTime)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {scope.length > 0 ? (
+                        <span className="flex flex-wrap gap-1">
+                          {scope.map((label) => (
+                            <span key={label} className="whitespace-nowrap rounded-md bg-base-200 px-2 py-0.5 text-xs font-medium text-base-content/80">
+                              {label}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="text-base-content/70">All</span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
+                      {job.processedItems} / {job.totalItems}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right text-base-content/80">
+                      {job.downloadedPages} / {job.totalPages}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <Link
+                          to={`/admin/retrieval/history/${job.id}`}
+                          className="inline-flex min-h-11 items-center px-2 font-semibold text-primary no-underline hover:underline"
+                        >
+                          Sections
+                        </Link>
+                        {isOpen && (
+                          <Form method="post">
+                            <input type="hidden" name="_action" value="mark_failed" />
+                            <input type="hidden" name="processId" value={job.processId} />
+                            <button
+                              type="submit"
+                              className="inline-flex min-h-11 items-center px-2 font-semibold text-error hover:underline"
+                            >
+                              Mark failed
+                            </button>
+                          </Form>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              
+              {jobsData.jobs.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-6 text-center text-base-content/70">
+                    No retrieval jobs found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      </div>
-      
-      {/* Pagination */}
-      {jobsData.pagination.totalPages > 1 && (
-        <div className="flex justify-center mt-6">
-          <nav className="inline-flex rounded-md shadow">
-            {Array.from({ length: jobsData.pagination.totalPages }, (_, i) => i + 1).map((page) => (
-              <Link
-                key={page}
-                to={`?page=${page}`}
-                className={`px-4 py-2 text-sm font-medium ${
-                  page === currentPage
-                    ? 'bg-primary text-white'
-                    : 'bg-base-100 text-base-content/70 hover:bg-base-200'
-                } ${
-                  page === 1 ? 'rounded-l-md' : ''
-                } ${
-                  page === jobsData.pagination.totalPages ? 'rounded-r-md' : ''
-                }`}
-              >
-                {page}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      )}
-    </div>
+
+        {totalPages > 1 && (
+          <div className="border-t border-base-300 px-4 py-3">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              summary={`Showing ${firstShown}–${lastShown} of ${total}`}
+              pageHref={(p) => `?page=${p}`}
+            />
+          </div>
+        )}
+      </section>
+    </AdminShell>
   );
-} 
+}
