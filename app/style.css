@@ -26,6 +26,14 @@
   --color-neutral: #14182B;
   --color-neutral-content: #FFFFFF;
 
+  /* Listing-count ramp for the prefecture tile map, from fewest (1) to most (6). */
+  --color-map-1: #E4E9F2;
+  --color-map-2: #C3CEE3;
+  --color-map-3: #93A7CB;
+  --color-map-4: #5F7BB3;
+  --color-map-5: #2E4A80;
+  --color-map-6: #14284F;
+
   /* Status colours: taken from the redesign's badge palette, solid versions for buttons and alerts. */
   --color-info: #2F5BD3;
   --color-info-content: #FFFFFF;
