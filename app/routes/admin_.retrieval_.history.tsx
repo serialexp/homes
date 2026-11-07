@@ -15,6 +15,19 @@ import {
   StatusPill,
 } from "../components/AdminUi.js";
 
+/** Jobs per page: the default, and the ceiling a query string may not exceed. */
+const DEFAULT_JOBS_PER_PAGE = 10;
+const MAX_JOBS_PER_PAGE = 100;
+/** Highest page a query string may ask for. Keeps the row offset well inside Prisma's 32-bit skip. */
+const MAX_JOBS_PAGE = 100_000;
+
+/** A whole number from a query parameter, clamped to [min, max]. Missing or non-numeric input gives the fallback. */
+function boundedInt(raw: string | null, fallback: number, min: number, max: number): number {
+  const value = Number.parseInt(raw ?? "", 10);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(value, min), max);
+}
+
 // Define a type for the serialized job data
 type SerializedRetrievalJob = {
   id: number;
@@ -36,8 +49,8 @@ type SerializedRetrievalJob = {
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdminAuth(request);
   const url = new URL(request.url);
-  const page = parseInt(url.searchParams.get("page") || "1", 10);
-  const limit = parseInt(url.searchParams.get("limit") || "10", 10);
+  const page = boundedInt(url.searchParams.get("page"), 1, 1, MAX_JOBS_PAGE);
+  const limit = boundedInt(url.searchParams.get("limit"), DEFAULT_JOBS_PER_PAGE, 1, MAX_JOBS_PER_PAGE);
 
   const [jobsData, stats] = await Promise.all([
     getRetrievalJobs(page, limit),
