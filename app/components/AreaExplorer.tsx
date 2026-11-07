@@ -70,7 +70,7 @@ export function AreaExplorer({ areas, countsByProvince, hrefFor, countNoun }: Ar
       </div>
 
       {view === "map" ? (
-        <PrefectureTileMap tiles={tiles} />
+        <PrefectureTileMap tiles={tiles} countNoun={countNoun} />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {Object.entries(areas).map(([areaId, area]) => {

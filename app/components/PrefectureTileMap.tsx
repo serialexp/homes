@@ -22,10 +22,10 @@ function tileColor(bucket: number): string {
  * Stylised prefecture map: one tile per prefecture, coloured by its listing count.
  * Each tile is a link to that prefecture's listings. Layout comes from app/utils/prefectureTiles.ts.
  */
-export function PrefectureTileMap({ tiles }: { tiles: PrefectureTileView[] }) {
+export function PrefectureTileMap({ tiles, countNoun = "listings" }: { tiles: PrefectureTileView[]; countNoun?: string }) {
   return (
     <figure className="m-0 flex flex-col gap-5 rounded-box border border-base-300 bg-base-100 p-6">
-      <ul aria-label="Legend: listings per prefecture" className="m-0 flex list-none flex-wrap gap-x-4 gap-y-2 p-0">
+      <ul aria-label={`Legend: ${countNoun} per prefecture`} className="m-0 flex list-none flex-wrap gap-x-4 gap-y-2 p-0">
         {tileLegend().map(({ bucket, label }) => (
           <li key={bucket} className="flex items-center gap-2 text-xs tabular-nums text-base-content/80">
             <span
@@ -57,7 +57,7 @@ export function PrefectureTileMap({ tiles }: { tiles: PrefectureTileView[] }) {
               <Link
                 key={tile.code}
                 to={tile.href}
-                aria-label={`${tile.name}, ${tile.count.toLocaleString("en-US")} listings`}
+                aria-label={`${tile.name}, ${tile.count.toLocaleString("en-US")} ${countNoun}`}
                 className={`relative flex min-w-0 flex-col justify-between rounded-md px-1.5 py-1.5 no-underline transition-[transform,box-shadow] duration-100 hover:-translate-y-px hover:shadow-[0_0_0_2px_var(--color-base-100),0_0_0_4px_var(--color-accent)] focus-visible:shadow-[0_0_0_2px_var(--color-base-100),0_0_0_4px_var(--color-accent)] focus-visible:outline-none`}
                 style={style}
               >

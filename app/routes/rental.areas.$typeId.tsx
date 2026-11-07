@@ -1,7 +1,8 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData, useParams } from "@remix-run/react";
+import { Link, useLoaderData } from "@remix-run/react";
 import { areas } from "../data/propertyData.js";
 import prisma from "../utils/db.server.js";
+import { AreaExplorer } from "../components/AreaExplorer.js";
 
 // For rentals, we only have one type (040)
 const RENTAL_TYPE_ID = '040';
@@ -40,39 +41,25 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 export default function RentalAreasPage() {
   const { areas, selectedType, countsByProvince } = useLoaderData<typeof loader>();
-  
+
   return (
-    <div className="container mx-auto p-4">
-      <div className="mb-6">
-        <Link to="/" className="text-primary hover:underline">← Back to Property Types</Link>
-        <h2 className="text-2xl font-bold mt-2">Select Area for {selectedType.name} Properties</h2>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {Object.entries(areas).map(([areaId, area]) => (
-          <div key={areaId} className="bg-base-100 border border-base-300 rounded-lg shadow p-6">
-            <h3 className="text-xl font-semibold mb-1">{area.name}</h3>
-            <p className="text-sm text-base-content/60 mb-4">
-              {Object.values(countsByProvince[areaId] || {}).reduce((a, b) => a + b, 0).toLocaleString()} units
-            </p>
-            <div className="space-y-2">
-              {Object.entries(area.provinces).map(([provinceId, provinceName]) => {
-                const count = countsByProvince[areaId]?.[provinceId] || 0;
-                return (
-                <Link
-                  key={provinceId}
-                  to={`/rental/properties/${selectedType.id}/${areaId}/${provinceId}`}
-                  className="flex justify-between items-center p-3 bg-base-200 hover:bg-base-200 rounded"
-                >
-                  <span>{String(provinceName)}</span>
-                  <span className="text-sm text-base-content/60">{count.toLocaleString()}</span>
-                </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-4 pb-4 pt-8 sm:px-8">
+      <nav aria-label="Breadcrumb" className="flex flex-wrap gap-2 text-sm text-base-content/60">
+        <Link to="/" className="text-base-content/60 hover:text-base-content">Home</Link>
+        <span aria-hidden="true">/</span>
+        <span className="text-base-content">{selectedType.name}</span>
+      </nav>
+
+      <h1 className="m-0 font-display text-[clamp(30px,4vw,42px)] leading-[1.1] tracking-[-0.025em]">
+        Select an area for rentals
+      </h1>
+
+      <AreaExplorer
+        areas={areas}
+        countsByProvince={countsByProvince}
+        hrefFor={(areaId, provinceId) => `/rental/properties/${selectedType.id}/${areaId}/${provinceId}`}
+        countNoun="units available"
+      />
     </div>
   );
-} 
+}
