@@ -1,0 +1,4 @@
+# TODO
+
+- **Docker build context leaks host files into the image.** `.dockerignore` only excludes `.env`, so `COPY . .` in the build stage sends `node_modules` (~570 MB), `.git` and `build/` to the daemon, and copies the host's `node_modules` over the one `pnpm install` just made in the container. It works today only because the host is also Linux/glibc. Exclude `node_modules`, `.git`, `build`, `data/image-cache` and similar in `.dockerignore`.
+- **No image workflow.** The Dockerfile refers to `.github/workflows/docker.yml`, which doesn't exist, and the repo now lives on gothab, where `.github/workflows/release.yml` (just-release) doesn't run. Images are built and pushed by hand (`aeolun/homes:<sha>` and `:latest`). Decide on a release and image pipeline for gothab, and remove the stale GitHub workflow and the remote `release/2026-03-25` branch.
