@@ -18,6 +18,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      # Suumo images, fetched once and served through /img. Survives container recreation.
+      - image-cache:/app/data/image-cache
     networks:
       - caddy
       - default
@@ -75,3 +78,4 @@ networks:
 
 volumes:
   mysql-data:
+  image-cache:
