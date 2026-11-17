@@ -4,6 +4,8 @@ import { getRetrievalStatus, storeRetrievalStatus } from './redis.server.js';
 import type { RetrievalStatus } from './redis.server.js';
 import { runRetrievalJob } from './retrieveCommandService.server.js';
 import { enqueueRetrieval } from './retrievalQueue.server.js';
+import { recoverInterruptedPropertyDetailRequests } from './propertyDetailService.server.js';
+import { runPropertyDetailLoop } from './propertyDetailWorker.server.js';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -100,6 +102,7 @@ async function workLoop() {
  */
 export async function startRetrievalWorker() {
   await recoverInterruptedJobs();
+  await recoverInterruptedPropertyDetailRequests();
 
   cron.schedule("30 10 * * *", async () => {
     console.log("Running scheduled data retrieval...");
@@ -114,5 +117,6 @@ export async function startRetrievalWorker() {
   console.log("Data retrieval scheduler initialized (runs daily at 10:30)");
   console.log("Retrieval worker started");
 
+  void runPropertyDetailLoop();
   await workLoop();
 }
