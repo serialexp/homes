@@ -1,7 +1,7 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { areas } from "../data/propertyData.js";
-import prisma from "../utils/db.server.js";
+import { getRentalCounts } from "../services/areaCounts.server.js";
 import { AreaExplorer } from "../components/AreaExplorer.js";
 
 // For rentals, we only have one type (040)
@@ -15,19 +15,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     throw new Response("Invalid property type", { status: 404 });
   }
 
-  // Count rental units per building region/province
-  const provinceCounts = await prisma.$queryRaw<Array<{ region: string; province: string; count: bigint }>>`
-    SELECT b.region, b.province, COUNT(ru.id) as count
-    FROM rental_unit ru
-    JOIN building b ON ru.building_id = b.id
-    GROUP BY b.region, b.province
-  `;
-
-  const countsByProvince: Record<string, Record<string, number>> = {};
-  for (const row of provinceCounts) {
-    if (!countsByProvince[row.region]) countsByProvince[row.region] = {};
-    countsByProvince[row.region][row.province] = Number(row.count);
-  }
+  const countsByProvince = await getRentalCounts();
 
   return json({
     areas,
