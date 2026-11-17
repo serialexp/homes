@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isAllowedImageSource } from "./imageProxy.js";
+import { isAllowedImageSource, normalizedImageSource } from "./imageProxy.js";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
@@ -23,10 +23,11 @@ const inFlight = new Map<string, Promise<CachedImage | null>>();
  * The image for a Suumo source URL, from the disk cache or fetched once and then cached.
  * Returns null when the source isn't allowed or the image can't be fetched.
  */
-export function getCachedImage(source: string): Promise<CachedImage | null> {
-  if (!isAllowedImageSource(source)) {
+export function getCachedImage(requested: string): Promise<CachedImage | null> {
+  if (!isAllowedImageSource(requested)) {
     return Promise.resolve(null);
   }
+  const source = normalizedImageSource(requested);
 
   const key = createHash("sha256").update(source).digest("hex");
   const pending = inFlight.get(key);

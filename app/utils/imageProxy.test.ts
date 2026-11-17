@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedImageSource, proxiedImageUrl } from "./imageProxy.js";
+import { isAllowedImageSource, normalizedImageSource, proxiedImageUrl } from "./imageProxy.js";
 
 const suumo = "https://img01.suumo.com/jj/resizeImage?src=gazo%2Fbukken%2F030%2Fa.jpg&w=192&h=144";
 
@@ -23,9 +23,26 @@ describe("isAllowedImageSource", () => {
   });
 });
 
+describe("normalizedImageSource", () => {
+  it("pins a Suumo resize URL to the 1024x768 size, whatever size it asked for", () => {
+    const pinned = normalizedImageSource("https://img01.suumo.com/jj/resizeImage?src=gazo%2Fa.jpg&w=192&h=144");
+    expect(pinned).toBe("https://img01.suumo.com/jj/resizeImage?src=gazo%2Fa.jpg&w=1024&h=768");
+    expect(normalizedImageSource("https://img01.suumo.com/jj/resizeImage?src=gazo%2Fa.jpg")).toBe("https://img01.suumo.com/jj/resizeImage?src=gazo%2Fa.jpg&w=1024&h=768");
+  });
+
+  it("leaves other allowed URLs unchanged", () => {
+    expect(normalizedImageSource("https://img01.suumo.com/gazo/a.jpg")).toBe("https://img01.suumo.com/gazo/a.jpg");
+  });
+});
+
 describe("proxiedImageUrl", () => {
+  it("points a resize URL at the proxy with the pinned size", () => {
+    const pinned = "https://img01.suumo.com/jj/resizeImage?src=gazo%2Fa.jpg&w=1024&h=768";
+    expect(proxiedImageUrl("https://img01.suumo.com/jj/resizeImage?src=gazo%2Fa.jpg&w=192&h=144")).toBe(`/img?u=${encodeURIComponent(pinned)}`);
+  });
+
   it("points an allowed source at the proxy with the source encoded", () => {
-    expect(proxiedImageUrl(suumo)).toBe(`/img?u=${encodeURIComponent(suumo)}`);
+    expect(proxiedImageUrl(suumo)).toBe(`/img?u=${encodeURIComponent("https://img01.suumo.com/jj/resizeImage?src=gazo%2Fbukken%2F030%2Fa.jpg&w=1024&h=768")}`);
   });
 
   it("returns nothing for a missing or disallowed source, so no image is rendered from it", () => {
