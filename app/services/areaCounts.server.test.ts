@@ -12,7 +12,7 @@ vi.mock('../utils/db.server.js', () => ({
   },
 }));
 
-import { getListingTotals, getRentalCounts, refreshAreaCounts } from './areaCounts.server.js';
+import { getBuyCounts, getListingTotals, getRentalCounts, refreshAreaCounts } from './areaCounts.server.js';
 
 const RENTAL_KEY = 'area-counts:rental';
 const TOTALS_KEY = 'area-counts:totals';
@@ -24,6 +24,12 @@ const rentalRows = [
   { region: '27', province: '27001', count: 9n },
 ];
 const expectedRental = { '13': { '13101': 5, '13102': 2 }, '27': { '27001': 9 } };
+
+const buyRows = [
+  { region: '13', province: '13101', _count: 30 },
+  { region: '27', province: '27001', _count: 10 },
+];
+const expectedBuy = { '13': { '13101': 30 }, '27': { '27001': 10 } };
 
 const typeRows = [
   { section_type: '021', _count: 40 },
@@ -75,6 +81,24 @@ describe('area counts cache', () => {
     });
   });
 
+  describe('buy counts', () => {
+    it('computes one type on a miss and stores it under that type', async () => {
+      redis.getRedisValue.mockResolvedValue(null);
+      db.groupBy.mockResolvedValue(buyRows);
+
+      expect(await getBuyCounts('021')).toEqual(expectedBuy);
+      expect(db.groupBy).toHaveBeenCalledWith({ by: ['region', 'province'], where: { section_type: '021' }, _count: true });
+      expect(redis.setRedisValue).toHaveBeenCalledWith('area-counts:buy:021', JSON.stringify(expectedBuy), TTL);
+    });
+
+    it('serves a hit without querying the database', async () => {
+      redis.getRedisValue.mockResolvedValue(JSON.stringify(expectedBuy));
+
+      expect(await getBuyCounts('021')).toEqual(expectedBuy);
+      expect(db.groupBy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('listing totals', () => {
     it('computes per-type and rental totals on a miss, leaving out untyped listings', async () => {
       redis.getRedisValue.mockResolvedValue(null);
@@ -101,7 +125,12 @@ describe('area counts cache', () => {
       await refreshAreaCounts();
 
       expect(db.queryRaw).toHaveBeenCalledTimes(1);
-      expect(db.groupBy).toHaveBeenCalledTimes(1);
+      // One groupBy for the totals, plus one per purchase type (everything but the rental type).
+      expect(db.groupBy).toHaveBeenCalledTimes(1 + 5);
+      for (const typeId of ['010', '011', '020', '021', '030']) {
+        expect(redis.setRedisValue).toHaveBeenCalledWith(`area-counts:buy:${typeId}`, expect.any(String), TTL);
+      }
+      expect(redis.setRedisValue).not.toHaveBeenCalledWith('area-counts:buy:040', expect.any(String), TTL);
       expect(redis.setRedisValue).toHaveBeenCalledWith(RENTAL_KEY, JSON.stringify(expectedRental), TTL);
       expect(redis.setRedisValue).toHaveBeenCalledWith(TOTALS_KEY, JSON.stringify(expectedTotals), TTL);
     });

@@ -1,7 +1,7 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { propertyTypes, areas } from "../data/propertyData.js";
-import prisma from "../utils/db.server.js";
+import { getBuyCounts } from "../services/areaCounts.server.js";
 import { AreaExplorer } from "../components/AreaExplorer.js";
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -11,17 +11,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     throw new Response("Invalid property type", { status: 404 });
   }
 
-  const provinceCounts = await prisma.property.groupBy({
-    by: ['region', 'province'],
-    where: { section_type: typeId },
-    _count: true,
-  });
-
-  const countsByProvince: Record<string, Record<string, number>> = {};
-  for (const row of provinceCounts) {
-    if (!countsByProvince[row.region]) countsByProvince[row.region] = {};
-    countsByProvince[row.region][row.province] = row._count;
-  }
+  const countsByProvince = await getBuyCounts(typeId);
 
   return json({
     areas,
