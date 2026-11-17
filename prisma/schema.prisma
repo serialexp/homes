@@ -73,10 +73,55 @@ model Property {
     insert_date              String         @db.VarChar(20)
     last_updated             DateTime       @default(now())
     priceHistory             PriceHistory[]
+    // When the Suumo detail page was last read. Null until someone views the property.
+    detail_fetched_at        DateTime?
+    details                  PropertyDetailFact[]
+    photos                   PropertyPhoto[]
+    detailRequest            PropertyDetailRequest?
 
     @@index([suumo_id])
     @@index([section_type, region, province])
     @@map("property")
+}
+
+// The spec table rows from the Suumo detail page that we don't have a typed column for, in Suumo's order.
+model PropertyDetailFact {
+    id          Int      @id @default(autoincrement())
+    property_id Int
+    sort_order  Int
+    label       String   @db.VarChar(255)
+    value       String   @db.Text
+    property    Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+    @@index([property_id])
+    @@map("property_detail_fact")
+}
+
+// Every photo on the Suumo detail page, not only the thumbnails the listing page carries.
+model PropertyPhoto {
+    id          Int      @id @default(autoincrement())
+    property_id Int
+    sort_order  Int
+    url         String   @db.VarChar(512)
+    caption     String   @db.VarChar(255)
+    property    Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+    @@index([property_id])
+    @@map("property_photo")
+}
+
+// A pending or failed read of a property's Suumo detail page. The worker takes these in order.
+model PropertyDetailRequest {
+    property_id  Int      @id
+    // 'queued' waiting for the worker, 'running' being read, 'failed' the last read failed (see last_error)
+    status       String   @db.VarChar(20)
+    requested_at DateTime @default(now())
+    attempts     Int      @default(0)
+    last_error   String?  @db.Text
+    property     Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+    @@index([status, requested_at])
+    @@map("property_detail_request")
 }
 
 // Building model for common building information
