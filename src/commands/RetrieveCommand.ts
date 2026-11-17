@@ -6,6 +6,7 @@ import { locationFromAddress, parseItemsForDB, PropertyItemDB, simpleXPathSelect
 import { parseRentalUnitsForDB, RentalUnitDB } from '../../app/utils/rentalParseUtils.js';
 import { processStationInfo } from '../../app/utils/trainUtils.server.js';
 import { fetchSuumoHtml } from './suumoClient.js';
+import { propertyTypes } from '../../app/data/propertyData.js';
 
 interface InputInterface {
   region?: string
@@ -93,14 +94,7 @@ class RetrieveCommand extends EventEmitter {
     return super.emit(event, ...args);
   }
 
-  private types = {
-    '040': 'Rental',
-    '030': 'Land',
-    '021': 'Second-hand house',
-    '020': 'New house',
-    '011': 'Second-hand mansion',
-    '010': 'New mansion'
-  };
+  private types = propertyTypes;
 
   private areas = {
     '010': {

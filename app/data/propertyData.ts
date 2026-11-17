@@ -1,11 +1,12 @@
-// Property types from RetrieveCommand
+// The property types we retrieve and show. RetrieveCommand reads this list, so it is the only one.
+// New mansion (010) is left out: Suumo's purchase listing endpoint answers HTTP 500 for it, and its own
+// endpoint (JJ011FC001) uses a project layout our parser does not read. See TODO.md.
 export const propertyTypes: Record<string, string> = {
   '040': 'Rental',
   '030': 'Land',
   '021': 'Second-hand house',
   '020': 'New house',
   '011': 'Second-hand mansion',
-  '010': 'New mansion'
 };
 
 // Areas from RetrieveCommand

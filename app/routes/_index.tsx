@@ -7,9 +7,8 @@ import { getListingTotals } from "../services/areaCounts.server.js";
 // For rentals, we only have one type (040)
 const RENTAL_TYPE_ID = '040';
 
-// The five purchase types, in the redesign's order, with their Japanese labels.
+// The purchase types, in the redesign's order, with their Japanese labels. New mansion (010) is not retrieved; see propertyData.
 const PURCHASE_TYPES: { id: string; jp: string }[] = [
-  { id: '010', jp: '新築マンション' },
   { id: '011', jp: '中古マンション' },
   { id: '020', jp: '新築一戸建て' },
   { id: '021', jp: '中古一戸建て' },
