@@ -2,7 +2,7 @@ import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 import { areas, propertyTypes } from "../data/propertyData.js";
-import prisma from "../utils/db.server.js";
+import { getListingTotals } from "../services/areaCounts.server.js";
 
 // For rentals, we only have one type (040)
 const RENTAL_TYPE_ID = '040';
@@ -22,24 +22,10 @@ const PREFECTURES = Object.entries(areas)
   .sort((a, b) => a.id.localeCompare(b.id));
 
 export async function loader(_args: LoaderFunctionArgs) {
-  // Get counts per property type and total rental units
-  const [propertyCounts, rentalCount] = await Promise.all([
-    prisma.property.groupBy({
-      by: ['section_type'],
-      _count: true,
-    }),
-    prisma.rentalUnit.count(),
-  ]);
+  // Per-type and rental totals come from the cache the worker refreshes after each retrieval.
+  const { countsByType, rentalCount } = await getListingTotals();
 
-  const countsByType: Record<string, number> = {};
-  for (const row of propertyCounts) {
-    if (row.section_type) countsByType[row.section_type] = row._count;
-  }
-
-  return json({
-    countsByType,
-    rentalCount,
-  });
+  return json({ countsByType, rentalCount });
 }
 
 function ArrowRight({ className }: { className?: string }) {

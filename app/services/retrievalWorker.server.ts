@@ -4,7 +4,7 @@ import { getRetrievalStatus, storeRetrievalStatus } from './redis.server.js';
 import type { RetrievalStatus } from './redis.server.js';
 import { runRetrievalJob } from './retrieveCommandService.server.js';
 import { enqueueRetrieval } from './retrievalQueue.server.js';
-import { refreshRentalCounts } from './areaCounts.server.js';
+import { refreshAreaCounts } from './areaCounts.server.js';
 import { recoverInterruptedPropertyDetailRequests } from './propertyDetailService.server.js';
 import { runPropertyDetailLoop } from './propertyDetailWorker.server.js';
 
@@ -95,9 +95,9 @@ async function workLoop() {
       }
     }
 
-    // Rental counts only change when a retrieval runs, so refresh the cached counts now, while the job's data is fresh.
-    await refreshRentalCounts().catch(error => {
-      console.error('Rental area counts could not be refreshed:', error);
+    // Area and front-page counts only change when a retrieval runs, so refresh the cached counts now, while the job's data is fresh.
+    await refreshAreaCounts().catch(error => {
+      console.error('Area counts could not be refreshed:', error);
     });
   }
 }

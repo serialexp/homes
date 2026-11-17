@@ -4,15 +4,21 @@ import prisma from '../utils/db.server.js';
 /** Listing counts per region and prefecture: region -> province -> count. */
 export type CountsByProvince = Record<string, Record<string, number>>;
 
+/** The front-page totals: purchase listings per property type, and rental units overall. */
+export interface ListingTotals {
+  countsByType: Record<string, number>;
+  rentalCount: number;
+}
+
 /**
- * Rental counts only change when a retrieval runs, and the worker refreshes this key when one finishes.
+ * These counts only change when a retrieval runs, and the worker refreshes every key here when one finishes.
  * The expiry is a backstop for a key the worker never got to refresh, not the normal refresh path.
  */
 const RENTAL_COUNTS_KEY = 'area-counts:rental';
-const RENTAL_COUNTS_TTL_SECONDS = 7 * 24 * 60 * 60;
+const LISTING_TOTALS_KEY = 'area-counts:totals';
+const COUNTS_TTL_SECONDS = 7 * 24 * 60 * 60;
 
-/** Counts rental units per building region and prefecture. This is the expensive query the cache exists for. */
-export async function computeRentalCounts(): Promise<CountsByProvince> {
+async function computeRentalCounts(): Promise<CountsByProvince> {
   const rows = await prisma.$queryRaw<Array<{ region: string; province: string; count: bigint }>>`
     SELECT b.region, b.province, COUNT(ru.id) as count
     FROM rental_unit ru
@@ -28,33 +34,64 @@ export async function computeRentalCounts(): Promise<CountsByProvince> {
   return counts;
 }
 
-/** Recomputes the rental counts and stores them. Called by the worker when a retrieval finishes. */
-export async function refreshRentalCounts(): Promise<CountsByProvince> {
-  const counts = await computeRentalCounts();
-  await setRedisValue(RENTAL_COUNTS_KEY, JSON.stringify(counts), RENTAL_COUNTS_TTL_SECONDS);
-  return counts;
+async function computeListingTotals(): Promise<ListingTotals> {
+  const [perType, rentalCount] = await Promise.all([
+    prisma.property.groupBy({ by: ['section_type'], _count: true }),
+    prisma.rentalUnit.count(),
+  ]);
+
+  const countsByType: Record<string, number> = {};
+  for (const row of perType) {
+    if (row.section_type) countsByType[row.section_type] = row._count;
+  }
+  return { countsByType, rentalCount };
 }
 
 /**
- * The rental counts from the cache, computed and stored on a miss. If Redis cannot be read or written,
- * the counts are computed directly, so the page still renders, just more slowly.
+ * Read-through cache. A miss computes and stores the value. If Redis cannot be read, the value is computed
+ * directly and not stored, so the page still renders, just more slowly. If Redis cannot be written, the value is
+ * returned anyway.
  */
-export async function getRentalCounts(): Promise<CountsByProvince> {
+async function readThrough<T>(key: string, compute: () => Promise<T>): Promise<T> {
+  let cached: string | null;
   try {
-    const cached = await getRedisValue(RENTAL_COUNTS_KEY);
-    if (cached) {
-      return JSON.parse(cached) as CountsByProvince;
-    }
+    cached = await getRedisValue(key);
   } catch (error) {
-    console.error('Rental counts cache could not be read:', error);
-    return computeRentalCounts();
+    console.error(`Cache ${key} could not be read:`, error);
+    return compute();
+  }
+  if (cached) {
+    return JSON.parse(cached) as T;
   }
 
-  const counts = await computeRentalCounts();
+  const value = await compute();
   try {
-    await setRedisValue(RENTAL_COUNTS_KEY, JSON.stringify(counts), RENTAL_COUNTS_TTL_SECONDS);
+    await setRedisValue(key, JSON.stringify(value), COUNTS_TTL_SECONDS);
   } catch (error) {
-    console.error('Rental counts cache could not be written:', error);
+    console.error(`Cache ${key} could not be written:`, error);
   }
-  return counts;
+  return value;
+}
+
+/** Recomputes a value and overwrites what is stored. Called by the worker when a retrieval finishes. */
+async function refresh<T>(key: string, compute: () => Promise<T>): Promise<T> {
+  const value = await compute();
+  await setRedisValue(key, JSON.stringify(value), COUNTS_TTL_SECONDS);
+  return value;
+}
+
+export function getRentalCounts(): Promise<CountsByProvince> {
+  return readThrough(RENTAL_COUNTS_KEY, computeRentalCounts);
+}
+
+export function getListingTotals(): Promise<ListingTotals> {
+  return readThrough(LISTING_TOTALS_KEY, computeListingTotals);
+}
+
+/** Refreshes every cached count. Called by the worker after each retrieval job, success or failure. */
+export async function refreshAreaCounts(): Promise<void> {
+  await Promise.all([
+    refresh(RENTAL_COUNTS_KEY, computeRentalCounts),
+    refresh(LISTING_TOTALS_KEY, computeListingTotals),
+  ]);
 }
