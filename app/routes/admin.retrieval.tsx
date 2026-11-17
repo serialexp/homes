@@ -32,8 +32,8 @@ export async function action({ request }: ActionFunctionArgs) {
     await storeRetrievalStatus({
       status: 'idle',
       message: 'Status reset by admin',
-      progress: 0,
-      total: 0,
+      itemsProcessed: 0,
+      itemsTotal: 0,
       startTime: new Date(),
       sectionsToFetch: 0,
       sectionsProcessed: 0
@@ -131,10 +131,6 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
   ? Math.round((sectionsProcessed / sectionsToFetch) * 100)
   : 0;
 
-  // Calculate progress percentage
-  const progressPercentage = currentStatus && currentStatus.total > 0
-    ? Math.round((currentStatus.progress / currentStatus.total) * 100)
-    : 0;
   
   return (
     <>
@@ -167,7 +163,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
               {currentStatus.status === 'running' && (
                 <div className="flex flex-col items-end">
                   <span className="font-display text-[34px] font-bold leading-none tracking-[-0.02em] tabular-nums">
-                    {progressPercentage}%
+                    {sectionsProgressPercentage}%
                   </span>
                   {currentStatus.estimatedCompletionTime && (
                     <span className="text-[13px] text-base-content/70">
@@ -192,10 +188,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between gap-2 text-sm">
                     <span className="font-medium">Items</span>
-                    <span className="tabular-nums text-base-content/70">{currentStatus.progress} / {currentStatus.total}</span>
-                  </div>
-                  <div role="progressbar" aria-label="Items" aria-valuenow={progressPercentage} aria-valuemin={0} aria-valuemax={100} className="h-2.5 overflow-hidden rounded-full bg-base-300">
-                    <div className="h-2.5 rounded-full bg-[#5A78B4]" style={{ width: `${progressPercentage}%` }} />
+                    <span className="tabular-nums text-base-content/70">{currentStatus.itemsProcessed.toLocaleString()} / {currentStatus.itemsTotal.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -219,7 +212,7 @@ const sectionsProgressPercentage = currentStatus && sectionsToFetch > 0
               </div>
               <div className="flex flex-col gap-0.5">
                 <dt className="text-base-content/60">Items processed</dt>
-                <dd className="m-0 font-semibold tabular-nums">{currentStatus.progress} / {currentStatus.total}</dd>
+                <dd className="m-0 font-semibold tabular-nums">{currentStatus.itemsProcessed.toLocaleString()} / {currentStatus.itemsTotal.toLocaleString()}</dd>
               </div>
               {currentStatus.endTime && (
                 <div className="flex flex-col gap-0.5">

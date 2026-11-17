@@ -56,8 +56,8 @@ async function resetStatusToIdle() {
   const idleStatus: RetrievalStatus = {
     status: 'idle',
     message: 'No retrieval process running',
-    progress: 0,
-    total: 0,
+    itemsProcessed: 0,
+    itemsTotal: 0,
     sectionsToFetch: 0,
     sectionsProcessed: 0,
     startTime: new Date()

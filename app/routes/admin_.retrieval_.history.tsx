@@ -77,8 +77,8 @@ export async function action({ request }: ActionFunctionArgs) {
       await storeRetrievalStatus({
         status: 'idle',
         message: 'No retrieval process running',
-        progress: 0,
-        total: 0,
+        itemsProcessed: 0,
+        itemsTotal: 0,
         startTime: new Date(),
         sectionsToFetch: 0,
         sectionsProcessed: 0,
@@ -102,8 +102,8 @@ export async function action({ request }: ActionFunctionArgs) {
     await storeRetrievalStatus({
       status: 'idle',
       message: 'No retrieval process running',
-      progress: 0,
-      total: 0,
+      itemsProcessed: 0,
+      itemsTotal: 0,
       startTime: new Date(),
       sectionsToFetch: 0,
       sectionsProcessed: 0,

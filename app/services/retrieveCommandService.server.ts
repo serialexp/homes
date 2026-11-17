@@ -60,8 +60,8 @@ async function executeRetrieval(options: {
         await storeRetrievalStatus({
           status: 'running',
           message: 'Starting retrieval process...',
-          progress: 0,
-          total: 0,
+          itemsProcessed: 0,
+          itemsTotal: 0,
           startTime: new Date(),
           sectionsToFetch: 0,
           sectionsProcessed: 0,
@@ -73,7 +73,7 @@ async function executeRetrieval(options: {
         retrieveCommand.on('total-items', (total) => {
           totalItems = total;
           updateRetrievalStatusField({
-            total: totalItems,
+            itemsTotal: totalItems,
             message: `Found ${total} items across all sections`
           });
         });
@@ -105,9 +105,7 @@ async function executeRetrieval(options: {
             processingStartTime = new Date();
             updateRetrievalStatusField({
               processingStartTime,
-              message: `Starting retrieval phase for ${sectionsToFetch} sections (${totalItems} items, sorted by recency)`,
-              progress: 0,
-              total: sectionsToFetch
+              message: `Starting retrieval phase for ${sectionsToFetch} sections (${totalItems} items, sorted by recency)`
             });
             return;
           }
@@ -126,8 +124,6 @@ async function executeRetrieval(options: {
 
             updateRetrievalStatusField({
               sectionsProcessed,
-              progress: sectionsProcessed,
-              total: sectionsToFetch,
               estimatedCompletionTime,
               message
             });
@@ -178,6 +174,7 @@ async function executeRetrieval(options: {
           // Accumulate the delta since the last event within this section
           processedItems += (sectionProcessedItems - lastSectionItemCount);
           lastSectionItemCount = sectionProcessedItems;
+          updateRetrievalStatusField({ itemsProcessed: processedItems });
         });
 
         // Add cancellation check before fetching pages
@@ -208,8 +205,8 @@ async function executeRetrieval(options: {
         await storeRetrievalStatus({
           status: 'completed',
           message: 'Retrieval process completed successfully',
-          progress: sectionsProcessed,
-          total: sectionsToFetch,
+          itemsProcessed: processedItems,
+          itemsTotal: totalItems,
           startTime: new Date(),
           sectionsToFetch,
           sectionsProcessed,
@@ -234,8 +231,8 @@ async function executeRetrieval(options: {
           await storeRetrievalStatus({
             status: 'cancelled',
             message: 'Retrieval process was cancelled by user',
-            progress: sectionsProcessed,
-            total: sectionsToFetch,
+            itemsProcessed: processedItems,
+            itemsTotal: totalItems,
             startTime: new Date(),
             sectionsToFetch,
             sectionsProcessed,
@@ -256,8 +253,8 @@ async function executeRetrieval(options: {
           await storeRetrievalStatus({
             status: 'failed',
             message: 'Retrieval process failed',
-            progress: sectionsProcessed,
-            total: sectionsToFetch,
+            itemsProcessed: processedItems,
+            itemsTotal: totalItems,
             startTime: new Date(),
             sectionsToFetch,
             sectionsProcessed,

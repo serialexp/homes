@@ -36,8 +36,8 @@ export async function enqueueRetrieval(options: {
   const initialStatus: RetrievalStatus = {
     status: 'queued',
     message: 'Waiting for the retrieval worker...',
-    progress: 0,
-    total: 0,
+    itemsProcessed: 0,
+    itemsTotal: 0,
     sectionsToFetch: 0,
     sectionsProcessed: 0,
     startTime: new Date(),
@@ -76,8 +76,8 @@ export async function cancelRetrieval() {
     try {
       await completeRetrievalJob(status.processId, {
         status: 'cancelled',
-        totalItems: status.total,
-        processedItems: status.progress
+        totalItems: status.itemsTotal,
+        processedItems: status.itemsProcessed
       });
     } catch (error) {
       console.error('Error updating retrieval job record:', error);

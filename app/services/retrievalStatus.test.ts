@@ -4,8 +4,8 @@ import { parseRetrievalStatus, retrievalStatusFields, type RetrievalStatus } fro
 const full: RetrievalStatus = {
   status: "running",
   message: "Found 12 items",
-  progress: 3,
-  total: 12,
+  itemsProcessed: 3,
+  itemsTotal: 12,
   sectionsToFetch: 4,
   sectionsProcessed: 1,
   startTime: new Date("2026-11-07T10:30:00.000Z"),
@@ -25,8 +25,8 @@ describe("retrievalStatusFields and parseRetrievalStatus", () => {
     const minimal: RetrievalStatus = {
       status: "queued",
       message: "Waiting",
-      progress: 0,
-      total: 0,
+      itemsProcessed: 0,
+      itemsTotal: 0,
       sectionsToFetch: 0,
       sectionsProcessed: 0,
       startTime: new Date("2026-11-07T10:30:00.000Z"),
@@ -43,11 +43,11 @@ describe("retrievalStatusFields and parseRetrievalStatus", () => {
   });
 
   it("reads a hash without a status field as 'unknown' instead of failing", () => {
-    const parsed = parseRetrievalStatus({ message: "partial", progress: "4" });
+    const parsed = parseRetrievalStatus({ message: "partial", itemsProcessed: "4" });
     expect(parsed).not.toBeNull();
     expect(parsed?.status).toBe("unknown");
     expect(parsed?.message).toBe("partial");
-    expect(parsed?.progress).toBe(4);
+    expect(parsed?.itemsProcessed).toBe(4);
   });
 
   it("reads an unrecognised status name as 'unknown'", () => {

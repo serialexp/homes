@@ -80,8 +80,8 @@ export const RETRIEVAL_STATUSES = ['unknown', 'idle', 'queued', 'running', 'comp
 export interface RetrievalStatus {
   status: (typeof RETRIEVAL_STATUSES)[number];
   message: string;
-  progress: number;
-  total: number;
+  itemsProcessed: number;
+  itemsTotal: number;
   sectionsToFetch: number;
   sectionsProcessed: number;
   startTime: Date;
@@ -99,8 +99,8 @@ export function retrievalStatusFields(status: RetrievalStatus): Record<string, s
   const fields: Record<string, string> = {
     status: status.status,
     message: status.message,
-    progress: status.progress.toString(),
-    total: status.total.toString(),
+    itemsProcessed: status.itemsProcessed.toString(),
+    itemsTotal: status.itemsTotal.toString(),
     sectionsToFetch: status.sectionsToFetch.toString(),
     sectionsProcessed: status.sectionsProcessed.toString(),
     startTime: status.startTime.toISOString(),
@@ -131,8 +131,8 @@ export function parseRetrievalStatus(data: Record<string, string>): RetrievalSta
   const status: RetrievalStatus = {
     status: state,
     message: data.message ?? '',
-    progress: parseInt(data.progress || '0', 10),
-    total: parseInt(data.total || '0', 10),
+    itemsProcessed: parseInt(data.itemsProcessed || '0', 10),
+    itemsTotal: parseInt(data.itemsTotal || '0', 10),
     sectionsToFetch: parseInt(data.sectionsToFetch || '0', 10),
     sectionsProcessed: parseInt(data.sectionsProcessed || '0', 10),
     startTime: new Date(data.startTime),
