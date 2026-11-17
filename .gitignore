@@ -3,3 +3,4 @@ vendor
 .env.swp
 node_modules
 build/
+data/image-cache/

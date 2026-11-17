@@ -6,6 +6,7 @@ import prisma from "../utils/db.server.js";
 import { areas } from "../data/propertyData.js";
 import { translateWithCache } from "../utils/llm.server.js";
 import { sqm, yen } from "../utils/format.js";
+import { proxiedImageUrl } from "../utils/imageProxy.js";
 import { Pagination } from "../components/Pagination.js";
 
 // For rentals, we only have one type (040)
@@ -423,7 +424,7 @@ export default function RentalPropertiesPage() {
                     <div className="flex flex-wrap gap-5 p-5">
                       <div className="relative h-[126px] w-[168px] shrink-0 overflow-hidden rounded-field bg-base-300">
                         {building.main_image_url ? (
-                          <img src={building.main_image_url} alt="" loading="lazy" className="size-full object-cover" />
+                          <img src={proxiedImageUrl(building.main_image_url)} alt="" loading="lazy" className="size-full object-cover" />
                         ) : null}
                       </div>
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { areas, propertyTypes } from "../data/propertyData.js";
 import prisma from "../utils/db.server.js";
 import { man, sqm, yen } from "../utils/format.js";
+import { proxiedImageUrl } from "../utils/imageProxy.js";
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const id = Number(params.id);
@@ -27,7 +28,7 @@ const shortDate = (value: string | Date) =>
 
 function galleryImages(main: string | null, additional: string | null): string[] {
   const extra = additional ? additional.split(",").map((url) => url.trim()).filter(Boolean) : [];
-  return [main, ...extra].filter((url): url is string => Boolean(url));
+  return [main, ...extra].map((url) => proxiedImageUrl(url)).filter((url): url is string => Boolean(url));
 }
 
 function PriceChart({ prices, label }: { prices: number[]; label: string }) {

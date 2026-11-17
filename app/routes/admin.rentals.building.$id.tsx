@@ -4,6 +4,7 @@ import prisma from '../utils/db.server.js';
 import { Pagination } from "../components/Pagination.js";
 import { BUTTON_SECONDARY, LABEL, PageHeader, PANEL } from "../components/AdminUi.js";
 import { parseStations } from "../utils/stations.js";
+import { proxiedImageUrl } from "../utils/imageProxy.js";
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const buildingId = parseInt(params.id || "0");
@@ -105,7 +106,7 @@ export default function BuildingDetails() {
 
         {building.main_image_url && (
           <img
-            src={building.main_image_url}
+            src={proxiedImageUrl(building.main_image_url)}
             alt={building.title || building.address}
             className="h-auto w-full rounded-field object-cover"
           />

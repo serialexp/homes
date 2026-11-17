@@ -3,6 +3,7 @@ import { Form, Link, useLoaderData, useSearchParams } from "@remix-run/react";
 import type { Prisma } from "@prisma/client";
 import { areas, propertyTypes } from "../data/propertyData.js";
 import { floorAreaOf, man, photoCount, shortYen, sqm, yen } from "../utils/format.js";
+import { proxiedImageUrl } from "../utils/imageProxy.js";
 import {
   LISTINGS_PER_PAGE,
   hasActiveFilters,
@@ -121,7 +122,7 @@ function ListingCard({ property }: { property: ListingRow }) {
     <article className="flex flex-col overflow-hidden rounded-box border border-base-300 bg-base-100">
       <Link to={detailHref} tabIndex={-1} className="relative flex h-48 items-center justify-center bg-base-300 text-base-content/50 no-underline">
         {property.main_image_url ? (
-          <img src={property.main_image_url} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />
+          <img src={proxiedImageUrl(property.main_image_url)} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />
         ) : (
           <span>No photo</span>
         )}

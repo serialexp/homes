@@ -3,6 +3,7 @@ import { useLoaderData, Link } from "@remix-run/react";
 import prisma from '../utils/db.server.js';
 import { BUTTON_SECONDARY, LABEL, PageHeader, PANEL } from "../components/AdminUi.js";
 import { parseStations } from "../utils/stations.js";
+import { proxiedImageUrl } from "../utils/imageProxy.js";
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const unitId = parseInt(params.id || "0");
@@ -161,12 +162,12 @@ export default function RentalUnitDetails() {
           <h2 id="images-h" className="m-0 text-lg font-semibold">Images</h2>
 
           {rentalUnit.thumbnail_url && (
-            <img src={rentalUnit.thumbnail_url} alt="Thumbnail" className="h-auto w-full rounded-field" />
+            <img src={proxiedImageUrl(rentalUnit.thumbnail_url)} alt="Thumbnail" className="h-auto w-full rounded-field" />
           )}
 
           {imageUrls.length > 0 ? (
             imageUrls.map((url, index) => (
-              <img key={index} src={url.trim()} alt={`Image ${index + 1}`} className="h-auto w-full rounded-field" />
+              <img key={index} src={proxiedImageUrl(url.trim())} alt={`Image ${index + 1}`} className="h-auto w-full rounded-field" />
             ))
           ) : (
             !rentalUnit.thumbnail_url && (
