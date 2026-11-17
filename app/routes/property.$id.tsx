@@ -1,10 +1,24 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
-import { useState } from "react";
+import { Link, useLoaderData, useRevalidator } from "@remix-run/react";
+import { useEffect, useState } from "react";
 import { areas, propertyTypes } from "../data/propertyData.js";
 import prisma from "../utils/db.server.js";
 import { man, sqm, yen } from "../utils/format.js";
 import { proxiedImageUrl } from "../utils/imageProxy.js";
+import { getPropertyDetails, requestPropertyDetails } from "../services/propertyDetailService.server.js";
+
+/** Detail-page labels already shown as typed fields above, so they are not repeated in the full specifications. */
+const TYPED_DETAIL_LABELS = new Set([
+  "価格",
+  "間取り",
+  "土地面積",
+  "建物面積",
+  "完成時期（築年月）",
+  "住所",
+  "交通",
+]);
+
+const DETAIL_POLL_INTERVAL_MS = 4000;
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const id = Number(params.id);
@@ -20,7 +34,13 @@ export async function loader({ params }: LoaderFunctionArgs) {
     throw new Response("Property not found", { status: 404 });
   }
 
-  return json({ property });
+  // Queues a read of the Suumo detail page when it is due. The worker does the read; the page follows along by polling.
+  await requestPropertyDetails(id).catch(error => {
+    console.error(`Property ${id}: could not queue detail read:`, error);
+  });
+  const details = await getPropertyDetails(id);
+
+  return json({ property, details });
 }
 
 const shortDate = (value: string | Date) =>
@@ -58,9 +78,25 @@ function PriceChart({ prices, label }: { prices: number[]; label: string }) {
 }
 
 export default function PropertyDetailPage() {
-  const { property } = useLoaderData<typeof loader>();
-  const images = galleryImages(property.main_image_url, property.additional_image_urls);
+  const { property, details } = useLoaderData<typeof loader>();
+  const listingImages = galleryImages(property.main_image_url, property.additional_image_urls);
+  const detailImages = (details?.photos ?? [])
+    .map((photo) => proxiedImageUrl(photo.url))
+    .filter((url): url is string => Boolean(url));
+  const images = detailImages.length > 0 ? detailImages : listingImages;
   const [imageIndex, setImageIndex] = useState(0);
+
+  const specs = (details?.facts ?? []).filter((fact) => !TYPED_DETAIL_LABELS.has(fact.label));
+  const detailsPending = details?.requestStatus === "queued" || details?.requestStatus === "running";
+  const revalidator = useRevalidator();
+  const revalidate = revalidator.revalidate;
+  useEffect(() => {
+    if (!detailsPending) {
+      return;
+    }
+    const timer = window.setInterval(() => revalidate(), DETAIL_POLL_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [detailsPending, revalidate]);
 
   const provinceName = areas[property.region]?.provinces[property.province];
   const areaName = areas[property.region]?.name;
@@ -161,6 +197,27 @@ export default function PropertyDetailPage() {
             </dl>
           </section>
 
+          {detailsPending && (
+            <p role="status" className="m-0 text-sm text-base-content/60">Reading the full property details from Suumo…</p>
+          )}
+          {details?.requestStatus === "failed" && (
+            <p role="status" className="m-0 text-sm text-base-content/60">The full property details could not be read from Suumo just now. We will try again later.</p>
+          )}
+
+          {specs.length > 0 && (
+            <section aria-labelledby="specs-h" className="flex flex-col gap-3.5">
+              <h2 id="specs-h" className="m-0 font-display text-[22px] tracking-[-0.01em]">Full specifications</h2>
+              <dl className="m-0 grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] overflow-hidden rounded-box border border-base-300 bg-base-100">
+                {specs.map((fact) => (
+                  <div key={fact.label} className="flex flex-col gap-0.5 border-b border-r border-base-300/60 px-4.5 py-3.5">
+                    <dt className="text-xs text-base-content/60">{fact.label}</dt>
+                    <dd className="m-0 whitespace-pre-line font-medium">{fact.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
+
           {tags.length > 0 && (
             <section aria-labelledby="tags-h" className="flex flex-col gap-3.5">
               <h2 id="tags-h" className="m-0 font-display text-[22px] tracking-[-0.01em]">Features</h2>
@@ -172,7 +229,7 @@ export default function PropertyDetailPage() {
             </section>
           )}
 
-          {property.additional_fields && (
+          {property.additional_fields && specs.length === 0 && (
             <section aria-labelledby="more-h" className="flex flex-col gap-3.5">
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <h2 id="more-h" className="m-0 font-display text-[22px] tracking-[-0.01em]">From the listing</h2>
