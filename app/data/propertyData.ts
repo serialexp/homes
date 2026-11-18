@@ -9,7 +9,7 @@ export const propertyTypes: Record<string, string> = {
   '011': 'Second-hand mansion',
 };
 
-// Areas from RetrieveCommand
+// Regions and their prefectures, in retrieval order. RetrieveCommand reads this table, so it is the only one.
 export const areas: Record<string, { name: string, provinces: Record<string, string> }> = {
   '010': {
     'name': 'Hokkaido',
