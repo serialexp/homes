@@ -1,12 +1,12 @@
-// The property types we retrieve and show. RetrieveCommand reads this list, so it is the only one.
-// New mansion (010) is left out: Suumo's purchase listing endpoint answers HTTP 500 for it, and its own
-// endpoint (JJ011FC001) uses a project layout our parser does not read. See TODO.md.
+// The property types we retrieve and show, in retrieval order. RetrieveCommand reads this list, so it is the only one.
+// New mansions (010) come from their own search page; see RetrieveCommand.newMansionBase.
 export const propertyTypes: Record<string, string> = {
   '040': 'Rental',
   '030': 'Land',
   '021': 'Second-hand house',
   '020': 'New house',
   '011': 'Second-hand mansion',
+  '010': 'New mansion',
 };
 
 // Suumo's own name for each property type. Stored as a listing's property_type, since the search section is what says
@@ -17,11 +17,12 @@ export const propertyTypeNamesJa: Record<string, string> = {
   '021': '中古一戸建て',
   '020': '新築一戸建て',
   '011': '中古マンション',
+  '010': '新築マンション',
 };
 
 // Types sold as units in a building. Their size is the unit's floor area (専有面積), stored as building_area,
 // and they have no land area of their own.
-export const unitPropertyTypes: ReadonlySet<string> = new Set(['011']);
+export const unitPropertyTypes: ReadonlySet<string> = new Set(['011', '010']);
 
 // Regions and their prefectures, in retrieval order. RetrieveCommand reads this table, so it is the only one.
 export const areas: Record<string, { name: string, provinces: Record<string, string> }> = {

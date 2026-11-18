@@ -4,6 +4,7 @@ import { EventEmitter } from 'events';
 import { Prisma } from '@prisma/client';
 import { locationFromAddress, parseItemsForDB, PropertyItemDB, simpleXPathSelect1 } from '../../app/utils/parseUtils.js';
 import { parseRentalUnitsForDB, RentalUnitDB } from '../../app/utils/rentalParseUtils.js';
+import { newMansionTotalItems, parseNewMansionItemsForDB } from '../../app/utils/newMansionParseUtils.js';
 import { processStationInfo } from '../../app/utils/trainUtils.server.js';
 import { fetchSuumoHtml } from './suumoClient.js';
 import { areas, propertyTypeNamesJa, propertyTypes } from '../../app/data/propertyData.js';
@@ -64,6 +65,8 @@ class RetrieveCommand extends EventEmitter {
   // misparsed (e.g. a site-wide total instead of the search count). Real Tokyo
   // searches run ~2000+ pages, so keep this comfortably above that.
   private static MAX_PAGES_PER_SECTION = 5000;
+  private static RENTAL_TYPE = '040';
+  private static NEW_MANSION_TYPE = '010';
 
   // Add event declarations for TypeScript
   on(event: 'total-items', listener: (total: number) => void): this;
@@ -100,6 +103,10 @@ class RetrieveCommand extends EventEmitter {
 
   // Base URL for purchase properties (sorted by 新着・更新順 = newest/updated first via po=1&pj=2)
   private purchaseBase = 'https://suumo.jp/jj/bukken/ichiran/JJ012FC001/?ar={area}&bs={type}&ta={province}&pn={page}&ekTjCd=&ekTjNm=&kb=1&kj=9&km=1&kt=9999999&tb=0&tj=0&tt=9999999&po=1&pj=2&pc=100';
+
+  // Base URL for new mansions, which the purchase search above answers with HTTP 500. Their own search uses a
+  // different page layout (see newMansionParseUtils). Sorted by 新着・更新順 = newest/updated first via popj=12.
+  private newMansionBase = 'https://suumo.jp/jj/bukken/ichiran/JJ011FC001/?ar={area}&bs={type}&ta={province}&po=1&pj=2&popj=12&pc=100&page={page}';
 
   // Base URL for rental properties (sorted by 新着順 = newest first via po1=09)
   private rentalBase = 'https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar={area}&bs={type}&ta={province}&page={page}&pc=50&po1=09&cb=0.0&ct=9999999&et=9999999&cn=9999999&mb=0&mt=9999999&shkr1=03&shkr2=03&shkr3=03&shkr4=03&fw2=&srch_navi=1';
@@ -292,7 +299,7 @@ class RetrieveCommand extends EventEmitter {
           let pageKnownUnchangedItems = 0;
           let pageTotalItems = 0;
 
-          if (type === '040') {
+          if (type === RetrieveCommand.RENTAL_TYPE) {
             // Rental properties
             const propertyItems = parseRentalUnitsForDB(document, regionId, provinceId);
             pageTotalItems = propertyItems.length;
@@ -326,7 +333,10 @@ class RetrieveCommand extends EventEmitter {
             // Purchase properties
             // The listing's address decides region and province. The search section gives the
             // listing type ('021' second-hand house, ...) and the fallback for an address with no prefecture.
-            const propertyItems = parseItemsForDB(document, regionId, provinceId).map(item => ({
+            const parsedItems = type === RetrieveCommand.NEW_MANSION_TYPE
+              ? parseNewMansionItemsForDB(document, regionId, provinceId)
+              : parseItemsForDB(document, regionId, provinceId);
+            const propertyItems = parsedItems.map(item => ({
               ...item,
               ...locationFromAddress(item.state, { region: regionId, province: provinceId }),
               section_type: type,
@@ -712,16 +722,19 @@ class RetrieveCommand extends EventEmitter {
    * result total (Suumo's scraped pagination is unreliable — see calc phase).
    */
   private getPageSize(type: string): number {
-    const baseUrl = type === '040' ? this.rentalBase : this.purchaseBase;
-    const match = baseUrl.match(/[?&]pc=(\d+)/);
+    const match = this.baseUrlFor(type).match(/[?&]pc=(\d+)/);
     return match ? parseInt(match[1], 10) : 50;
   }
 
+  /** The search that lists a property type: rentals and new mansions each have their own. */
+  private baseUrlFor(type: string): string {
+    if (type === RetrieveCommand.RENTAL_TYPE) return this.rentalBase;
+    if (type === RetrieveCommand.NEW_MANSION_TYPE) return this.newMansionBase;
+    return this.purchaseBase;
+  }
+
   private getPageUrl(pageNr: number, areaId: string, provinceId: string, type: string): string {
-    // Choose the appropriate base URL based on property type
-    const baseUrl = type === '040' ? this.rentalBase : this.purchaseBase;
-    
-    return baseUrl
+    return this.baseUrlFor(type)
       .replace('{area}', areaId)
       .replace('{type}', type)
       .replace('{page}', pageNr.toString())
@@ -751,6 +764,8 @@ class RetrieveCommand extends EventEmitter {
           return parseInt(digits[0], 10);
         }
       }
+      // New-mansion pages give their total in a hit box instead.
+      return newMansionTotalItems(document);
     } catch (error) {
       console.error('Error parsing total items:', error);
     }
@@ -761,7 +776,9 @@ class RetrieveCommand extends EventEmitter {
   private getTotalPages(document: Document): number {
     try {
       // Get the pagination list
-      const paginationList = simpleXPathSelect1(document as unknown as Element, '//div[contains(@class, "pagination_set-nav")]//ol[@class="pagination-parts"]') as Element;
+      // The list pages' pager, or the new-mansion pages' sortbox pager
+      const paginationList = (simpleXPathSelect1(document as unknown as Element, '//div[contains(@class, "pagination_set-nav")]//ol[@class="pagination-parts"]')
+        ?? simpleXPathSelect1(document as unknown as Element, '//ol[@class="sortbox_pagination-parts"]')) as Element;
       
       if (paginationList) {
         // Get all li elements
@@ -780,7 +797,9 @@ class RetrieveCommand extends EventEmitter {
         
         // If we didn't find a page number in anchors, check for current page
         // This happens when there's only one page
-        const currentPage = paginationList.getElementsByClassName('pagination-current')[0];
+        // xmldom elements have no getElementsByClassName, so find the current page's item by its class
+        const currentPage = Array.from(listItems).find(item =>
+          /(^|\s)(pagination-current|sortbox_pagination--current)(\s|$)/.test(item.getAttribute('class') ?? ''));
         if (currentPage) {
           return parseInt(currentPage.textContent?.trim() || '1', 10);
         }

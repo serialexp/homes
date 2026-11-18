@@ -7,8 +7,8 @@ import { getListingTotals } from "../services/areaCounts.server.js";
 // For rentals, we only have one type (040)
 const RENTAL_TYPE_ID = '040';
 
-// The purchase types, in the redesign's order. New mansion (010) is not retrieved; see propertyData.
-const PURCHASE_TYPES: { id: string; jp: string }[] = ['011', '020', '021', '030'].map((id) => ({ id, jp: propertyTypeNamesJa[id] }));
+// The purchase types, in the redesign's order.
+const PURCHASE_TYPES: { id: string; jp: string }[] = ['010', '011', '020', '021', '030'].map((id) => ({ id, jp: propertyTypeNamesJa[id] }));
 
 // Every prefecture with the area it belongs to, in JIS code order.
 const PREFECTURES = Object.entries(areas)

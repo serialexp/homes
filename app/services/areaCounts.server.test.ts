@@ -126,12 +126,11 @@ describe('area counts cache', () => {
 
       expect(db.queryRaw).toHaveBeenCalledTimes(1);
       // One groupBy for the totals, plus one per purchase type (everything but the rental type).
-      expect(db.groupBy).toHaveBeenCalledTimes(1 + 4);
-      for (const typeId of ['011', '020', '021', '030']) {
+      expect(db.groupBy).toHaveBeenCalledTimes(1 + 5);
+      for (const typeId of ['010', '011', '020', '021', '030']) {
         expect(redis.setRedisValue).toHaveBeenCalledWith(`area-counts:buy:${typeId}`, expect.any(String), TTL);
       }
       expect(redis.setRedisValue).not.toHaveBeenCalledWith('area-counts:buy:040', expect.any(String), TTL);
-      expect(redis.setRedisValue).not.toHaveBeenCalledWith('area-counts:buy:010', expect.any(String), TTL);
       expect(redis.setRedisValue).toHaveBeenCalledWith(RENTAL_KEY, JSON.stringify(expectedRental), TTL);
       expect(redis.setRedisValue).toHaveBeenCalledWith(TOTALS_KEY, JSON.stringify(expectedTotals), TTL);
     });
