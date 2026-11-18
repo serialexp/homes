@@ -1,1 +1,12 @@
+# The build installs its own dependencies and builds the app inside the image, so nothing generated on the host
+# belongs in the build context: copying the host's node_modules would replace the ones `pnpm install` just made.
 .env
+.env.*
+*.swp
+.git
+.github
+.claude
+node_modules
+build
+vendor
+data/image-cache

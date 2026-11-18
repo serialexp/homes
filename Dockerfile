@@ -21,6 +21,9 @@ COPY . .
 # Generate Prisma client
 RUN npx prisma generate
 
+# Run the test suite, so an image is never built from a commit whose tests fail
+RUN pnpm test
+
 # Build the application
 RUN pnpm build
 
@@ -47,7 +50,7 @@ COPY --from=build /app/data ./data
 ENV CI=true
 RUN npm install -g pnpm@11 && pnpm install --prod && npx prisma generate
 
-# Bake in version info (passed from CI; see .github/workflows/docker.yml)
+# Bake in version info (passed from CI; see .gothab/workflows/docker.yml)
 ARG GIT_SHA=unknown
 ARG BUILD_TIME=unknown
 ENV GIT_SHA=$GIT_SHA
