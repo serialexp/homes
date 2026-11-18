@@ -9,6 +9,20 @@ export const propertyTypes: Record<string, string> = {
   '011': 'Second-hand mansion',
 };
 
+// Suumo's own name for each property type. Stored as a listing's property_type, since the search section is what says
+// which type a listing is; the pills on a listing card are marketing labels, not the type.
+export const propertyTypeNamesJa: Record<string, string> = {
+  '040': '賃貸',
+  '030': '土地',
+  '021': '中古一戸建て',
+  '020': '新築一戸建て',
+  '011': '中古マンション',
+};
+
+// Types sold as units in a building. Their size is the unit's floor area (専有面積), stored as building_area,
+// and they have no land area of their own.
+export const unitPropertyTypes: ReadonlySet<string> = new Set(['011']);
+
 // Regions and their prefectures, in retrieval order. RetrieveCommand reads this table, so it is the only one.
 export const areas: Record<string, { name: string, provinces: Record<string, string> }> = {
   '010': {

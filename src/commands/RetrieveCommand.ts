@@ -6,7 +6,7 @@ import { locationFromAddress, parseItemsForDB, PropertyItemDB, simpleXPathSelect
 import { parseRentalUnitsForDB, RentalUnitDB } from '../../app/utils/rentalParseUtils.js';
 import { processStationInfo } from '../../app/utils/trainUtils.server.js';
 import { fetchSuumoHtml } from './suumoClient.js';
-import { areas, propertyTypes } from '../../app/data/propertyData.js';
+import { areas, propertyTypeNamesJa, propertyTypes } from '../../app/data/propertyData.js';
 
 interface InputInterface {
   region?: string
@@ -329,7 +329,8 @@ class RetrieveCommand extends EventEmitter {
             const propertyItems = parseItemsForDB(document, regionId, provinceId).map(item => ({
               ...item,
               ...locationFromAddress(item.state, { region: regionId, province: provinceId }),
-              section_type: type
+              section_type: type,
+              property_type: propertyTypeNamesJa[type] ?? ''
             }));
             pageTotalItems = propertyItems.length;
 
@@ -472,6 +473,7 @@ class RetrieveCommand extends EventEmitter {
               price: item.price,
               price_text: item.price_text || null,
               section_type: item.section_type,
+              property_type: item.property_type,
               region: item.region,
               province: item.province,
               last_updated: new Date()
@@ -482,7 +484,7 @@ class RetrieveCommand extends EventEmitter {
           // (the first scrape may have recorded a search section instead of the address)
           propertyUpdates.push({
             where: { id: existingProperty.id },
-            data: { section_type: item.section_type, region: item.region, province: item.province }
+            data: { section_type: item.section_type, property_type: item.property_type, region: item.region, province: item.province }
           });
         }
       } else {

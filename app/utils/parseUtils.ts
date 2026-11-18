@@ -309,8 +309,9 @@ export function parseItem(element: Element): PropertyItem | null {
       suumo_id: id,
       suumo_js_id: clipKey || id,
       
-      // Property metadata
-      property_type: propertyTags.length > 0 ? propertyTags[0] : '',
+      // Property metadata. The card says nothing reliable about the type (its first pill is usually a marketing label
+      // such as 購入サポート情報), so the caller sets property_type from the search section the card was listed under.
+      property_type: '',
       property_tags: propertyTags,
       title: title,
       url: url.startsWith('http') ? url : `https://suumo.jp${url}`,
@@ -958,6 +959,11 @@ export function parsePropertyDetails(element: Element): Pick<PropertyItem, 'pric
         break;
         
       case '建物面積':
+        result.building_area = parseArea(value);
+        break;
+
+      case '専有面積':
+        // A mansion unit's floor area. Mansions have no land area, so this is the listing's size.
         result.building_area = parseArea(value);
         break;
         

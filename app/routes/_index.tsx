@@ -1,19 +1,14 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
-import { areas, propertyTypes } from "../data/propertyData.js";
+import { areas, propertyTypeNamesJa, propertyTypes } from "../data/propertyData.js";
 import { getListingTotals } from "../services/areaCounts.server.js";
 
 // For rentals, we only have one type (040)
 const RENTAL_TYPE_ID = '040';
 
-// The purchase types, in the redesign's order, with their Japanese labels. New mansion (010) is not retrieved; see propertyData.
-const PURCHASE_TYPES: { id: string; jp: string }[] = [
-  { id: '011', jp: '中古マンション' },
-  { id: '020', jp: '新築一戸建て' },
-  { id: '021', jp: '中古一戸建て' },
-  { id: '030', jp: '土地' },
-];
+// The purchase types, in the redesign's order. New mansion (010) is not retrieved; see propertyData.
+const PURCHASE_TYPES: { id: string; jp: string }[] = ['011', '020', '021', '030'].map((id) => ({ id, jp: propertyTypeNamesJa[id] }));
 
 // Every prefecture with the area it belongs to, in JIS code order.
 const PREFECTURES = Object.entries(areas)

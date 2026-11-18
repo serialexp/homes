@@ -703,3 +703,55 @@ describe('parseItem', () => {
     expect(item?.district).toBe('字本別');
   });
 }); 
+describe('purchase card layouts', () => {
+  // Shaped like the live cards: a marketing pill first, then the dottable spec lines.
+  function card(lines: Record<string, string>, pill = '購入サポート情報'): Element {
+    const dottable = Object.entries(lines)
+      .map(([key, value]) => `<div class="dottable-line"><dt>${key}</dt><dd>${value}</dd></div>`)
+      .join('');
+    const html = `
+      <div class="property_unit">
+        <input name="bsnc" value="98765" />
+        <ul class="property_unit-pcts"><li><span class="ui-pct">${pill}</span></li></ul>
+        <h2 class="property_unit-title"><a href="/ms/chuko/hokkaido_/sc_sapporoshihigashi/nc_98765/">Card</a></h2>
+        <div class="dottable">${dottable}</div>
+      </div>`;
+    return createTestDocument(html).documentElement;
+  }
+
+  it('leaves property_type to the caller and keeps the pills as tags', () => {
+    const item = parseItem(card({ 所在地: '東京都江戸川区篠崎町３', 販売価格: '1200万円' }));
+
+    expect(item?.property_type).toBe('');
+    expect(item?.property_tags).toEqual(['購入サポート情報']);
+  });
+
+  it('reads a mansion unit floor area (専有面積) as the building area, with no land area', () => {
+    const item = parseItem(card({
+      物件名: '北35条ハウスB棟',
+      販売価格: '850万円',
+      所在地: '北海道札幌市東区北三十五条東８-2-23',
+      専有面積: '50.45m2（15.26坪）（壁芯）',
+      間取り: '2LDK',
+      バルコニー: '7.41m2',
+    }, ''));
+
+    expect(item?.building_area).toBe(50.45);
+    expect(item?.land_area).toBe(0);
+    expect(item?.area).toBe(0);
+    expect(item?.type).toBe('2LDK');
+    expect(item?.additional_fields).toMatchObject({ バルコニー: '7.41m2' });
+  });
+
+  it('still reads a house card land and building areas', () => {
+    const item = parseItem(card({
+      所在地: '東京都江戸川区篠崎町３',
+      販売価格: '1200万円',
+      土地面積: '38.05m2（登記）',
+      建物面積: '50.39m2（登記）',
+    }));
+
+    expect(item?.area).toBe(38.05);
+    expect(item?.building_area).toBe(50.39);
+  });
+});

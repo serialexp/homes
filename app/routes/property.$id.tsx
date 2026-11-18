@@ -1,7 +1,7 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData, useRevalidator } from "@remix-run/react";
 import { useEffect, useState } from "react";
-import { areas, propertyTypes } from "../data/propertyData.js";
+import { areas, propertyTypes, unitPropertyTypes } from "../data/propertyData.js";
 import prisma from "../utils/db.server.js";
 import { man, sqm, yen } from "../utils/format.js";
 import { proxiedImageUrl } from "../utils/imageProxy.js";
@@ -113,11 +113,15 @@ export default function PropertyDetailPage() {
   const reduction = latest && previous && latest.price < previous.price ? previous.price - latest.price : 0;
   const tags = property.property_tags ? property.property_tags.split(",").map((tag) => tag.trim()).filter(Boolean) : [];
 
+  // Mansion units have a floor area and no land of their own.
+  const isUnit = property.section_type ? unitPropertyTypes.has(property.section_type) : false;
+  const buildingAreaLabel = isUnit ? "Floor area" : "Building area";
+
   const facts: [string, string][] = [
-    ["Property type", property.property_type],
+    ["Property type", typeName ?? (property.property_type || "—")],
     ["Layout", property.type ?? "—"],
-    ["Land area", property.area > 0 ? sqm(property.area) : "—"],
-    ["Building area", property.building_area > 0 ? sqm(property.building_area) : "—"],
+    ...(isUnit ? [] : [["Land area", property.area > 0 ? sqm(property.area) : "—"] as [string, string]]),
+    [buildingAreaLabel, property.building_area > 0 ? sqm(property.building_area) : "—"],
     ["Building coverage", property.building_coverage ? `${property.building_coverage}%` : "—"],
     ["Floor area ratio", property.floor_area_ratio ? `${property.floor_area_ratio}%` : "—"],
     ["Train line", property.train_line],
@@ -252,8 +256,8 @@ export default function PropertyDetailPage() {
               </div>
             )}
             <dl className="m-0 grid grid-cols-2 gap-3.5">
-              <div className="flex flex-col"><dt className="text-xs text-base-content/60">Land area</dt><dd className="m-0 font-semibold">{property.area > 0 ? sqm(property.area) : "—"}</dd></div>
-              <div className="flex flex-col"><dt className="text-xs text-base-content/60">Building area</dt><dd className="m-0 font-semibold">{property.building_area > 0 ? sqm(property.building_area) : "—"}</dd></div>
+              {!isUnit && <div className="flex flex-col"><dt className="text-xs text-base-content/60">Land area</dt><dd className="m-0 font-semibold">{property.area > 0 ? sqm(property.area) : "—"}</dd></div>}
+              <div className="flex flex-col"><dt className="text-xs text-base-content/60">{buildingAreaLabel}</dt><dd className="m-0 font-semibold">{property.building_area > 0 ? sqm(property.building_area) : "—"}</dd></div>
               <div className="flex flex-col"><dt className="text-xs text-base-content/60">Layout</dt><dd className="m-0 font-semibold">{property.type ?? "—"}</dd></div>
               <div className="flex flex-col"><dt className="text-xs text-base-content/60">Station</dt><dd className="m-0 font-semibold">{property.train_station}</dd></div>
               <div className="flex flex-col"><dt className="text-xs text-base-content/60">Walk</dt><dd className="m-0 font-semibold">{property.walking_minutes ? `${property.walking_minutes} min` : "—"}</dd></div>
