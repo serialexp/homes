@@ -5,7 +5,7 @@ import { parsePropertyDetailPage } from "./propertyDetailParse.js";
 const fixture = readFileSync(new URL("./__fixtures__/suumo-detail-21745243.html", import.meta.url), "utf8");
 
 describe("parsePropertyDetailPage", () => {
-  const page = parsePropertyDetailPage(fixture);
+  const page = parsePropertyDetailPage(fixture, "https://suumo.jp/chukoikkodate/hokkaido_/sc_sapporoshiminami/nc_21745243/");
 
   it("returns every distinct gallery photo with its caption", () => {
     expect(page.photos).toHaveLength(16);
@@ -29,6 +29,10 @@ describe("parsePropertyDetailPage", () => {
   });
 
   it("returns nothing for a page without details", () => {
-    expect(parsePropertyDetailPage("<html><body><p>no listing</p></body></html>")).toEqual({ facts: [], photos: [] });
+    expect(parsePropertyDetailPage("<html><body><p>no listing</p></body></html>", "https://suumo.jp/")).toEqual({
+      facts: [],
+      photos: [],
+      outlineUrl: null,
+    });
   });
 });

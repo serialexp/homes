@@ -1,12 +1,12 @@
 import { fetchSuumoHtml } from '../../src/commands/suumoClient.js';
 import prisma from '../utils/db.server.js';
-import { parsePropertyDetailPage } from '../utils/propertyDetailParse.js';
 import {
   claimNextPropertyDetailRequest,
   dropPropertyDetailRequest,
   failPropertyDetailRequest,
   savePropertyDetails,
 } from './propertyDetailService.server.js';
+import { readPropertyDetailPage } from './propertyDetailReader.server.js';
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -53,8 +53,7 @@ export async function runPropertyDetailLoop(): Promise<void> {
         throw new Error(`Refusing to read a non-Suumo listing URL: ${property.url}`);
       }
 
-      const html = await fetchSuumoHtml(property.url);
-      await savePropertyDetails(propertyId, parsePropertyDetailPage(html));
+      await savePropertyDetails(propertyId, await readPropertyDetailPage(property.url, fetchSuumoHtml));
       console.log(`Property ${propertyId}: details read from Suumo`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
