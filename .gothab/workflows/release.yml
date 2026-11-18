@@ -1,0 +1,51 @@
+name: Release
+
+# just-release opens (or updates) a release PR from the conventional commits on main, and once that PR is merged
+# creates the release and its vX.Y.Z tag, which the Docker workflow then builds as a versioned image. It talks to
+# Gothab through the GitHub-compatible API with the job token.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Releases are computed from the history at the time they run; two overlapping runs would race on the release branch.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # On ordinary commits: create or update the release PR.
+  release-pr:
+    runs-on: ubuntu-latest
+    if: >-
+      !startsWith(github.event.head_commit.message, 'release:') &&
+      !(startsWith(github.event.head_commit.message, 'Merge') && contains(github.event.head_commit.message, 'release/'))
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - run: npx --yes just-release
+        env:
+          CI: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # On the release PR's merge: create the release, which creates the vX.Y.Z tag.
+  publish:
+    runs-on: ubuntu-latest
+    if: >-
+      startsWith(github.event.head_commit.message, 'release:') ||
+      (startsWith(github.event.head_commit.message, 'Merge') && contains(github.event.head_commit.message, 'release/'))
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - run: npx --yes just-release
+        env:
+          CI: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

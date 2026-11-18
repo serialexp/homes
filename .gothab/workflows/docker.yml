@@ -1,0 +1,52 @@
+name: Docker
+
+# Builds the image on every push to main (and on the v* tags the release flow creates) and pushes it to Docker Hub
+# as :latest, :<short-sha> and :<full-sha>, plus :<version> for a release tag. The test suite runs inside the
+# Dockerfile's build stage, so a commit whose tests fail never produces an image.
+#
+# Needs the DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets on this repository or the serialexp namespace.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+# A newer push supersedes a queued or running build of the same ref.
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  code: read
+
+jobs:
+  image:
+    name: Build and push image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        run: |
+          set -euo pipefail
+          image=aeolun/homes
+          tags=(latest "${GITHUB_SHA::7}" "${GITHUB_SHA}")
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tags+=("${GITHUB_REF#refs/tags/}")
+          fi
+
+          tag_args=()
+          for tag in "${tags[@]}"; do tag_args+=(-t "$image:$tag"); done
+          docker build \
+            --build-arg GIT_SHA="${GITHUB_SHA::7}" \
+            --build-arg BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            "${tag_args[@]}" .
+
+          # Push exactly the tags built here. The runner shares the host's Docker daemon, so
+          # `docker push --all-tags` could also push tags left over from other builds.
+          for tag in "${tags[@]}"; do docker push "$image:$tag"; done
